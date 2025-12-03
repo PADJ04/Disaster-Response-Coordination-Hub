@@ -3,7 +3,8 @@ import Navbar from './components/Navbar';
 import ActionDock from './components/ActionDock';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
-import VolunteerPage from './pages/VolunteerPage';
+import VolunteerSignupPage from './pages/VolunteerSignupPage';
+import DistrictSignupPage from './pages/DistrictSignupPage';
 import ReportPage from './pages/ReportPage';
 import VolunteerDashboard from './pages/VolunteerDashboard';
 import DistrictDashboard from './pages/DistrictDashboard';
@@ -22,8 +23,10 @@ export default function App() {
           return <LoginPage onNavigate={setActiveTab} onLogin={(role) => {
             setLoggedInRole(role);
           }} />;
-        case 'volunteer':
-          return <VolunteerPage onBack={() => setActiveTab('home')} />;
+        case 'volunteer-signup':
+          return <VolunteerSignupPage onBack={() => setActiveTab('home')} />;
+        case 'district-signup':
+          return <DistrictSignupPage onBack={() => setActiveTab('login')} />;
         case 'report':
           return <ReportPage onBack={() => setActiveTab('home')} />;
         default:
