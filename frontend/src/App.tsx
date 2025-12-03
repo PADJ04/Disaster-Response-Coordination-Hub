@@ -2,43 +2,71 @@ import { useState } from 'react';
 import Navbar from './components/Navbar';
 import ActionDock from './components/ActionDock';
 import HomePage from './pages/HomePage';
+import LoginPage from './pages/LoginPage';
 import VolunteerPage from './pages/VolunteerPage';
 import ReportPage from './pages/ReportPage';
+import VolunteerDashboard from './pages/VolunteerDashboard';
+import DistrictDashboard from './pages/DistrictDashboard';
 import type { TabType } from './types';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('home');
+  const [loggedInRole, setLoggedInRole] = useState<'volunteer' | 'district' | null>(null);
 
   // Navigation Logic
   const renderContent = () => {
-    switch (activeTab) {
-      case 'volunteer':
-        return <VolunteerPage onBack={() => setActiveTab('home')} />;
-      case 'report':
-        return <ReportPage onBack={() => setActiveTab('home')} />;
-      default:
-        return <HomePage onNavigate={setActiveTab} />;
+    if (!loggedInRole) {
+      switch (activeTab) {
+        case 'login':
+          // Pass a callback to LoginPage to set login state
+          return <LoginPage onNavigate={setActiveTab} onLogin={(role) => {
+            setLoggedInRole(role);
+          }} />;
+        case 'volunteer':
+          return <VolunteerPage onBack={() => setActiveTab('home')} />;
+        case 'report':
+          return <ReportPage onBack={() => setActiveTab('home')} />;
+        default:
+          return <HomePage onNavigate={setActiveTab} />;
+      }
+    } else {
+      // After login, show only dashboard for the role
+      if (loggedInRole === 'volunteer') {
+        return <VolunteerDashboard onLogout={() => {
+          setLoggedInRole(null);
+          setActiveTab('home');
+        }} />;
+      } else {
+        return <DistrictDashboard onLogout={() => {
+          setLoggedInRole(null);
+          setActiveTab('home');
+        }} />;
+      }
     }
   };
 
   return (
     <div className="min-h-screen bg-black text-white font-sans selection:bg-blue-500 selection:text-white overflow-x-hidden">
-      {/* Dynamic Background */}
+      {/* Simple Gradient Background (removed Unsplash/map image) */}
       <div className="fixed inset-0 z-0">
-        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop')] bg-cover bg-center opacity-60"></div>
-        <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/20 to-black/90"></div>
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-black"></div>
       </div>
 
       {/* Navigation Bar */}
-      <Navbar setActiveTab={setActiveTab} />
+      <Navbar setActiveTab={setActiveTab} loggedInRole={loggedInRole} onLogout={() => {
+        setLoggedInRole(null);
+        setActiveTab('home');
+      }} />
 
       {/* Main Content Area */}
       <main className="relative z-10 pt-20 pb-32 min-h-screen flex flex-col">
         {renderContent()}
       </main>
 
-      {/* Fixed Bottom Action Dock */}
-      <ActionDock activeTab={activeTab} setActiveTab={setActiveTab} />
+      {/* Fixed Bottom Action Dock: only show before login */}
+      {!loggedInRole && (
+        <ActionDock activeTab={activeTab} setActiveTab={setActiveTab} />
+      )}
     </div>
   );
 }

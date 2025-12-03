@@ -4,9 +4,11 @@ import type { TabType } from '../types';
 
 interface NavbarProps {
   setActiveTab: (tab: TabType) => void;
+  loggedInRole?: 'volunteer' | 'district' | null;
+  onLogout?: () => void;
 }
 
-export default function Navbar({ setActiveTab }: NavbarProps) {
+export default function Navbar({ setActiveTab, loggedInRole, onLogout }: NavbarProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -31,7 +33,7 @@ export default function Navbar({ setActiveTab }: NavbarProps) {
             <Globe className="w-8 h-8 text-blue-400 relative z-10 animate-pulse-slow" />
           </div>
           <span className="text-xl font-bold tracking-wider uppercase bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-white">
-            Terra<span className="font-light text-white/70">Monitor</span>
+            DRCH
           </span>
         </div>
 
@@ -42,9 +44,15 @@ export default function Navbar({ setActiveTab }: NavbarProps) {
               {item}
             </button>
           ))}
-          <button className="px-5 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full backdrop-blur-sm transition-all text-sm font-medium">
-            Login
-          </button>
+          {loggedInRole ? (
+            <button onClick={onLogout} className="w-10 h-10 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full backdrop-blur-sm transition-all flex items-center justify-center text-sm font-medium">
+              {loggedInRole === 'volunteer' ? 'V' : 'D'}
+            </button>
+          ) : (
+            <button onClick={() => setActiveTab('login')} className="px-5 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full backdrop-blur-sm transition-all text-sm font-medium">
+              Login
+            </button>
+          )}
         </div>
 
         {/* Mobile Menu Toggle */}
@@ -65,6 +73,15 @@ export default function Navbar({ setActiveTab }: NavbarProps) {
                 {item}
               </button>
             ))}
+            {loggedInRole ? (
+              <button onClick={onLogout} className="text-left text-lg text-white/80 hover:text-blue-400">
+                Logout ({loggedInRole === 'volunteer' ? 'V' : 'D'})
+              </button>
+            ) : (
+              <button onClick={() => setActiveTab('login')} className="text-left text-lg text-white/80 hover:text-blue-400">
+                Login
+              </button>
+            )}
           </div>
         </div>
       )}

@@ -1,9 +1,13 @@
 import type { ReactNode } from 'react';
 
-export type TabType = 'home' | 'volunteer' | 'report';
+export type TabType = 'home' | 'volunteer' | 'report' | 'login' | 'district-signup';
 
 export interface NavigationProps {
   onNavigate: (tab: TabType) => void;
+}
+
+export interface LoginProps extends NavigationProps {
+  onLogin: (role: 'volunteer' | 'district') => void;
 }
 
 export interface BackProps {
