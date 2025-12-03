@@ -1,0 +1,14 @@
+{
+  "speed": [
+    {
+      "if": "true",
+      "limit_to": 80
+    }
+  ],
+  "priority": [
+    {
+      "if": "true",
+      "multiply_by": 1
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+# ---- GraphHopper ----
+graphhopper/graph-cache/
+graphhopper/southern-zone-251125.osm.pbf
+graphhopper/graphhopper-web-11.0.jar
+
+# ---- OS / Editor files ----
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ---- Logs ----
+*.log

@@ -1,0 +1,9 @@
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
+
+/* You can add global styles below if needed, but the component handles most of it */
+body {
+  background-color: black;
+  color: white;
+}
