@@ -19,6 +19,13 @@ export default function Navbar({ setActiveTab, loggedInRole, onLogout }: NavbarP
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  const handleNavClick = (item: string) => {
+    if (item === 'Live Data') {
+      setActiveTab('live-data');
+    }
+    setIsMenuOpen(false);
+  };
+
   return (
     <nav className={`fixed top-0 w-full z-50 transition-all duration-300 border-b ${scrolled ? 'bg-black/80 backdrop-blur-md border-white/10 py-3' : 'bg-transparent border-transparent py-6'}`}>
       <div className="max-w-7xl mx-auto px-6 flex justify-between items-center">
@@ -40,7 +47,11 @@ export default function Navbar({ setActiveTab, loggedInRole, onLogout }: NavbarP
         {/* Desktop Links */}
         <div className="hidden md:flex items-center gap-8">
           {['Overview', 'Live Data', 'Missions', 'Community'].map((item) => (
-            <button key={item} className="text-sm font-medium text-white/70 hover:text-blue-400 transition-colors uppercase tracking-widest">
+            <button 
+              key={item} 
+              onClick={() => handleNavClick(item)}
+              className="text-sm font-medium text-white/70 hover:text-blue-400 transition-colors uppercase tracking-widest"
+            >
               {item}
             </button>
           ))}
@@ -69,7 +80,11 @@ export default function Navbar({ setActiveTab, loggedInRole, onLogout }: NavbarP
         <div className="absolute top-full left-0 w-full bg-black/95 backdrop-blur-xl border-b border-white/10 p-6 md:hidden animate-fade-in-down">
           <div className="flex flex-col gap-6">
             {['Overview', 'Live Data', 'Missions', 'Community'].map((item) => (
-              <button key={item} className="text-left text-lg text-white/80 hover:text-blue-400">
+              <button 
+                key={item}
+                onClick={() => handleNavClick(item)}
+                className="text-left text-lg text-white/80 hover:text-blue-400"
+              >
                 {item}
               </button>
             ))}

@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef } from 'react';
 import { HeartHandshake, AlertTriangle, ArrowRight, ChevronRight } from 'lucide-react';
 import type { TabType } from '../types';
 
@@ -7,14 +8,55 @@ interface ActionDockProps {
 }
 
 export default function ActionDock({ activeTab, setActiveTab }: ActionDockProps) {
+  const [isVisible, setIsVisible] = useState(false);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const checkContentHidden = () => {
+      const windowHeight = window.innerHeight;
+      const documentHeight = document.documentElement.scrollHeight;
+      const scrollTop = window.scrollY;
+      
+      return scrollTop + windowHeight < documentHeight - 100;
+    };
+
+    const handleScroll = () => {
+      const contentHidden = checkContentHidden();
+      
+      if (contentHidden) {
+        setIsVisible(true);
+        
+        if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+        
+        hideTimerRef.current = setTimeout(() => {
+          setIsVisible(false);
+        }, 1500);
+      } else {
+        setIsVisible(true);
+        if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+      }
+    };
+
+    const contentHidden = checkContentHidden();
+    if (!contentHidden) {
+      setIsVisible(true);
+    }
+
+    window.addEventListener('scroll', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    };
+  }, []);
+
   return (
-    <div className="fixed bottom-0 left-0 w-full z-40 p-4 md:p-8 pointer-events-none">
+    <div className={`fixed bottom-0 left-0 w-full z-40 p-4 md:p-8 pointer-events-none transition-opacity duration-300 ${isVisible ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
       <div className="max-w-4xl mx-auto flex flex-col md:flex-row gap-4 items-end md:items-center justify-center pointer-events-auto">
         
         {/* Volunteer Button */}
         <button 
-          onClick={() => setActiveTab('volunteer')}
-          className={`flex-1 w-full md:w-auto group relative overflow-hidden rounded-2xl p-[1px] transition-transform active:scale-95 ${activeTab === 'volunteer' ? 'ring-2 ring-blue-500' : ''}`}
+          onClick={() => setActiveTab('volunteer-signup')}
+          className={`flex-1 w-full md:w-auto group relative overflow-hidden rounded-2xl p-[1px] transition-transform active:scale-95 ${activeTab === 'volunteer-signup' ? 'ring-2 ring-blue-500' : ''}`}
         >
           <div className="absolute inset-0 bg-gradient-to-r from-teal-400 to-blue-500 opacity-80 group-hover:opacity-100 transition-opacity"></div>
           <div className="relative bg-black/40 backdrop-blur-xl h-full rounded-2xl px-6 py-4 flex items-center justify-between gap-4 group-hover:bg-black/20 transition-colors">

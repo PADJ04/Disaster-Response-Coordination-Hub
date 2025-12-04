@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-export type TabType = 'home' | 'volunteer-signup' | 'report' | 'login' | 'district-signup';
+export type TabType = 'home' | 'volunteer-signup' | 'report' | 'login' | 'district-signup' | 'live-data';
 
 export interface NavigationProps {
   onNavigate: (tab: TabType) => void;

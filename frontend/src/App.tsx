@@ -6,6 +6,7 @@ import LoginPage from './pages/LoginPage';
 import VolunteerSignupPage from './pages/VolunteerSignupPage';
 import DistrictSignupPage from './pages/DistrictSignupPage';
 import ReportPage from './pages/ReportPage';
+import LiveDataPage from './pages/LiveDataPage';
 import VolunteerDashboard from './pages/VolunteerDashboard';
 import DistrictDashboard from './pages/DistrictDashboard';
 import type { TabType } from './types';
@@ -29,6 +30,8 @@ export default function App() {
           return <DistrictSignupPage onBack={() => setActiveTab('login')} />;
         case 'report':
           return <ReportPage onBack={() => setActiveTab('home')} />;
+        case 'live-data':
+          return <LiveDataPage onBack={() => setActiveTab('home')} />;
         default:
           return <HomePage onNavigate={setActiveTab} />;
       }
@@ -66,8 +69,8 @@ export default function App() {
         {renderContent()}
       </main>
 
-      {/* Fixed Bottom Action Dock: only show before login */}
-      {!loggedInRole && (
+      {/* Fixed Bottom Action Dock: only show before login and not on live-data */}
+      {!loggedInRole && activeTab !== 'live-data' && (
         <ActionDock activeTab={activeTab} setActiveTab={setActiveTab} />
       )}
     </div>
