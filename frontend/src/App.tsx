@@ -65,7 +65,7 @@ export default function App() {
       }} />
 
       {/* Main Content Area */}
-      <main className="relative z-10 pt-20 pb-32 min-h-screen flex flex-col">
+      <main className={`relative z-10 flex flex-col ${activeTab === 'live-data' ? 'h-screen p-0' : 'pt-20 pb-32 min-h-screen'}` }>
         {renderContent()}
       </main>
 
