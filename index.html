@@ -2,199 +2,421 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Disaster Routing - Bridge Avoidance</title>
+  <title>Disaster Response - Route Optimization</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
   <style>
-    body{margin:0;font-family:Inter,Arial,Helvetica,sans-serif}
-    #map{height:100vh}
-    .panel{position:absolute;left:10px;top:10px;z-index:1000;background:#fff;padding:12px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.12);width:260px}
-    .panel button{width:100%;padding:8px;margin:6px 0;border-radius:6px;border:0;background:#1976d2;color:#fff;cursor:pointer}
-    .panel button.warn{background:#d32f2f}
-    .panel select{width:100%;padding:6px;border-radius:6px;margin-top:6px}
-    .small{font-size:13px;color:#333;margin-top:6px}
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    #map { height: 100vh; }
+    
+    .leaflet-draw-toolbar, .leaflet-control-zoom { display: none !important; }
+    
+    .sidebar {
+      position: fixed;
+      left: 20px;
+      top: 20px;
+      width: 360px;
+      max-height: 90vh;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #fff;
+      padding: 20px;
+      overflow-y: auto;
+      z-index: 1000;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+      border-radius: 12px;
+      cursor: move;
+      user-select: none;
+    }
+    
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid rgba(255,255,255,0.1);
+      cursor: grab;
+    }
+    
+    .header:active { cursor: grabbing; }
+    
+    .header h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 700;
+    }
+    
+    .tool-section {
+      margin-bottom: 20px;
+    }
+    
+    .tool-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #64b5f6;
+      margin-bottom: 10px;
+    }
+    
+    .tool-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    
+    .tool-buttons.full { grid-template-columns: 1fr; }
+    
+    button {
+      padding: 10px 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+      color: #fff;
+    }
+    
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(25,118,210,0.3); }
+    .btn-primary.active { background: linear-gradient(135deg, #388e3c 0%, #2e7d32 100%); }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+    
+    .btn-danger {
+      background: linear-gradient(135deg, #d32f2f 0%, #c62828 100%);
+      color: #fff;
+    }
+    
+    .btn-danger:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(211,47,47,0.3); }
+    .btn-danger.active { background: linear-gradient(135deg, #388e3c 0%, #2e7d32 100%); }
+    .btn-danger:disabled { opacity: 0.4; cursor: not-allowed; }
+    
+    .btn-success {
+      background: linear-gradient(135deg, #388e3c 0%, #2e7d32 100%);
+      color: #fff;
+      width: 100%;
+    }
+    
+    .btn-success:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(56,142,60,0.3); }
+    
+    .btn-secondary {
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    
+    .btn-secondary:hover { background: rgba(255,255,255,0.15); }
+    
+    .zoom-controls {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    
+    .zoom-btn {
+      flex: 1;
+      padding: 8px;
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.3s;
+    }
+    
+    .zoom-btn:hover { background: rgba(255,255,255,0.15); }
+    
+    select {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 6px;
+      font-size: 12px;
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      cursor: pointer;
+    }
+    
+    select:focus { outline: none; border-color: #64b5f6; }
+    select option { background: #1a1a2e; color: #fff; }
+    
+    .divider { height: 1px; background: rgba(255,255,255,0.1); margin: 15px 0; }
+    
+    .result-box {
+      background: rgba(100,181,246,0.1);
+      border: 1px solid rgba(100,181,246,0.3);
+      border-radius: 6px;
+      padding: 10px;
+      margin-top: 12px;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    
+    .result-box strong { color: #64b5f6; }
   </style>
 </head>
 <body>
 
-<div class="panel">
-  <strong>🚨 Disaster Routing — Bridge Avoidance</strong>
-  <div style="margin-top:8px">
-    <button id="setStart">Set Start (click map)</button>
-    <button id="setEnd">Set End (click map)</button>
-    <button id="toggleBlock" class="warn">Toggle Block Bridge</button>
-    <button id="calcRoute">Calculate Route (avoid if blocked)</button>
-    <button id="clear">Clear</button>
+<div class="sidebar" id="sidebar">
+  <div class="header" id="sidebarHeader">
+    <i class="fas fa-exclamation-triangle" style="font-size: 20px; color: #ff6b6b;"></i>
+    <h1>Disaster Route</h1>
   </div>
-  <div class="small">Profile
-    <select id="profile"><option value="car">car</option><option value="foot">foot</option></select>
+
+  <div class="tool-section">
+    <div class="tool-title">Map Controls</div>
+    <div class="zoom-controls">
+      <button class="zoom-btn" id="zoomIn" title="Zoom In"><i class="fas fa-plus"></i></button>
+      <button class="zoom-btn" id="zoomOut" title="Zoom Out"><i class="fas fa-minus"></i></button>
+    </div>
   </div>
-  <div id="info" class="small"></div>
+
+  <div class="divider"></div>
+
+  <div class="tool-section">
+    <div class="tool-title">Hazard Zone</div>
+    <div class="tool-buttons full">
+      <button class="btn-primary" id="drawBtn"><i class="fas fa-draw-polygon"></i> Draw</button>
+    </div>
+    <div class="tool-buttons">
+      <button class="btn-danger" id="blockBtn" disabled><i class="fas fa-ban"></i> Block</button>
+      <button class="btn-secondary" id="clearZoneBtn"><i class="fas fa-trash"></i> Clear</button>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="tool-section">
+    <div class="tool-title">Route Points</div>
+    <div class="tool-buttons">
+      <button class="btn-primary" id="startBtn"><i class="fas fa-map-pin"></i> Start</button>
+      <button class="btn-primary" id="endBtn"><i class="fas fa-flag"></i> End</button>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="tool-section">
+    <div class="tool-title">Transport</div>
+    <select id="profile">
+      <option value="car">Car</option>
+      <option value="foot">Pedestrian</option>
+    </select>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="tool-section">
+    <button class="btn-success" id="calcBtn"><i class="fas fa-route"></i> Calculate</button>
+    <div id="resultBox"></div>
+  </div>
+
+  <div class="tool-section">
+    <button class="btn-secondary" id="resetBtn" style="width: 100%;"><i class="fas fa-redo"></i> Reset</button>
+  </div>
 </div>
 
 <div id="map"></div>
 
 <script>
-  // --- map setup
-  const map = L.map('map').setView([15.434,75.013], 15);
-  // Base layers
-const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19,
-  attribution: '&copy; OpenStreetMap contributors'
-});
+  const sidebar = document.getElementById('sidebar');
+  const header = document.getElementById('sidebarHeader');
+  let isDragging = false;
+  let offset = { x: 0, y: 0 };
 
-// Satellite layer (Esri World Imagery)
-const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-  maxZoom: 19,
-  attribution: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics'
-});
-
-streetLayer.addTo(map);
-
-// Layer control to switch views
-const baseLayers = {
-  "Street View": streetLayer,
-  "Satellite View": satelliteLayer
-};
-
-L.control.layers(baseLayers).addTo(map);
-
-  // --- state
-  let mode = null; // 'start' or 'end'
-  let startMarker=null, endMarker=null, routeLine=null;
-  let bridgeBlocked=false;
-  let bridgeLayer=null;
-
-  // Bridge line endpoints (lat,lon)
-  const bridgeStart = [15.435741,75.010975];
-  const bridgeEnd   = [15.436248,75.011394];
-
-  // Create a rectangular polygon around the bridge (simple buffer) - it's lat,lng points for Leaflet
-  const bridgePolyLatLng = [
-    [15.435491,75.010745],
-    [15.435998,75.011624],
-    [15.436498,75.012043],
-    [15.435991,75.011164]
-  ];
-
-  // Draw the bridge polygon (visual only)
-  function drawBridgeVisual(){
-    if(bridgeLayer) map.removeLayer(bridgeLayer);
-    bridgeLayer = L.polygon(bridgePolyLatLng, {color:'red',fillColor:'#f44336',fillOpacity:0.35}).addTo(map).bindPopup('Bridge (toggle block to avoid)');
-  }
-  drawBridgeVisual();
-
-  // Helpers to set start/end
-  document.getElementById('setStart').onclick = ()=>{ mode='start'; alert('Click on map to place START'); };
-  document.getElementById('setEnd').onclick   = ()=>{ mode='end';   alert('Click on map to place END'); };
-
-  map.on('click', e=>{
-    if(!mode) return;
-    if(mode==='start'){
-      if(startMarker) map.removeLayer(startMarker);
-      startMarker = L.marker(e.latlng,{title:'Start'}).addTo(map).bindPopup('Start').openPopup();
-    }
-    if(mode==='end'){
-      if(endMarker) map.removeLayer(endMarker);
-      endMarker = L.marker(e.latlng,{title:'End'}).addTo(map).bindPopup('End').openPopup();
-    }
-    mode=null;
+  header.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    offset.x = e.clientX - sidebar.offsetLeft;
+    offset.y = e.clientY - sidebar.offsetTop;
   });
 
-  // Toggle blocked bridge flag and update visual
-  document.getElementById('toggleBlock').onclick = ()=>{
-    bridgeBlocked = !bridgeBlocked;
-    document.getElementById('toggleBlock').textContent = bridgeBlocked? 'Unblock Bridge' : 'Block Bridge';
-    drawBridgeVisual();
-    if(bridgeBlocked){ bridgeLayer.setStyle({color:'#b71c1c',fillColor:'#b71c1c',fillOpacity:0.4}); }
-    else { bridgeLayer.setStyle({color:'red',fillColor:'#f44336',fillOpacity:0.35}); }
+  document.addEventListener('mousemove', (e) => {
+    if (isDragging) {
+      sidebar.style.left = (e.clientX - offset.x) + 'px';
+      sidebar.style.top = (e.clientY - offset.y) + 'px';
+    }
+  });
+
+  document.addEventListener('mouseup', () => {
+    isDragging = false;
+  });
+
+  const map = L.map('map').setView([15.434, 75.013], 15);
+  
+  const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap'
+  });
+
+  const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 19,
+    attribution: 'Tiles &copy; Esri'
+  });
+
+  streetLayer.addTo(map);
+  L.control.layers({ "Street": streetLayer, "Satellite": satelliteLayer }).addTo(map);
+
+  document.getElementById('zoomIn').onclick = () => map.zoomIn();
+  document.getElementById('zoomOut').onclick = () => map.zoomOut();
+
+  const drawnItems = new L.FeatureGroup();
+  map.addLayer(drawnItems);
+
+  const drawControl = new L.Control.Draw({
+    draw: { polygon: true, polyline: false, rectangle: false, circle: false, marker: false },
+    edit: { featureGroup: drawnItems }
+  });
+  map.addControl(drawControl);
+
+  let mode = null, startMarker = null, endMarker = null, routeLine = null;
+  let blockZoneBlocked = false, blockZonePolygon = null;
+  let drawMode = false;
+
+  map.on('draw:created', e => {
+    drawnItems.addLayer(e.layer);
+    blockZonePolygon = e.layer;
+    document.getElementById('blockBtn').disabled = false;
+    document.getElementById('drawBtn').classList.remove('active');
+    drawMode = false;
+  });
+
+  document.getElementById('drawBtn').onclick = () => {
+    drawMode = !drawMode;
+    document.getElementById('drawBtn').classList.toggle('active', drawMode);
+    if (drawMode) {
+      new L.Draw.Polygon(map, drawControl.options.draw.polygon).enable();
+    }
   };
 
-  // Clear everything
-  document.getElementById('clear').onclick = ()=>{
-    if(startMarker) map.removeLayer(startMarker);
-    if(endMarker) map.removeLayer(endMarker);
-    if(routeLine) map.removeLayer(routeLine);
-    startMarker = endMarker = routeLine = null;
-    document.getElementById('info').innerHTML = '';
+  document.getElementById('blockBtn').onclick = () => {
+    if (!blockZonePolygon) return;
+    blockZoneBlocked = !blockZoneBlocked;
+    document.getElementById('blockBtn').classList.toggle('active', blockZoneBlocked);
+    blockZonePolygon.setStyle({ color: blockZoneBlocked ? '#2e7d32' : '#d32f2f', fillOpacity: blockZoneBlocked ? 0.3 : 0.2 });
   };
 
-  // Build GeoJSON polygon in lon,lat order (GraphHopper expects [lon,lat])
-  function buildBridgeGeoJSON(){
-    // Use the same polygon corners but as [lon,lat]
-    return {
-      type: 'Feature',
-      geometry: {
-        type: 'Polygon',
-        coordinates: [[
-          [75.010745,15.435491],
-          [75.011624,15.435998],
-          [75.012043,15.436498],
-          [75.011164,15.435991],
-          [75.010745,15.435491]
-        ]]
-      }
-    };
+  document.getElementById('clearZoneBtn').onclick = () => {
+    drawnItems.clearLayers();
+    blockZonePolygon = null;
+    blockZoneBlocked = false;
+    document.getElementById('blockBtn').disabled = true;
+    document.getElementById('blockBtn').classList.remove('active');
+  };
+
+  document.getElementById('startBtn').onclick = () => {
+    mode = mode === 'start' ? null : 'start';
+    document.getElementById('startBtn').classList.toggle('active', mode === 'start');
+  };
+
+  document.getElementById('endBtn').onclick = () => {
+    mode = mode === 'end' ? null : 'end';
+    document.getElementById('endBtn').classList.toggle('active', mode === 'end');
+  };
+
+  map.on('click', e => {
+    if (!mode) return;
+    if (mode === 'start') {
+      if (startMarker) map.removeLayer(startMarker);
+      startMarker = L.marker(e.latlng).addTo(map).bindPopup('START').openPopup();
+      document.getElementById('startBtn').classList.remove('active');
+      mode = null;
+    }
+    if (mode === 'end') {
+      if (endMarker) map.removeLayer(endMarker);
+      endMarker = L.marker(e.latlng).addTo(map).bindPopup('END').openPopup();
+      document.getElementById('endBtn').classList.remove('active');
+      mode = null;
+    }
+  });
+
+  document.getElementById('resetBtn').onclick = () => {
+    if (startMarker) map.removeLayer(startMarker);
+    if (endMarker) map.removeLayer(endMarker);
+    if (routeLine) map.removeLayer(routeLine);
+    drawnItems.clearLayers();
+    startMarker = endMarker = routeLine = blockZonePolygon = null;
+    blockZoneBlocked = false;
+    document.getElementById('blockBtn').disabled = true;
+    document.getElementById('blockBtn').classList.remove('active');
+    document.getElementById('resultBox').innerHTML = '';
+    mode = null;
+  };
+
+  function buildBlockZoneGeoJSON() {
+    if (!blockZonePolygon) return null;
+    const latlngs = blockZonePolygon.getLatLngs()[0];
+    const coords = latlngs.map(ll => [ll.lng, ll.lat]);
+    coords.push(coords[0]);
+    return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [coords] } };
   }
 
-  // Compute route
-  document.getElementById('calcRoute').onclick = async ()=>{
-    if(!startMarker || !endMarker){ alert('Place start and end first'); return; }
+  document.getElementById('calcBtn').onclick = async () => {
+    if (!startMarker || !endMarker) return;
     const s = startMarker.getLatLng();
     const e = endMarker.getLatLng();
     const profile = document.getElementById('profile').value;
 
-    // Build request body
     const body = {
       profile: profile,
-      points: [ [s.lng, s.lat], [e.lng, e.lat] ], // GraphHopper uses lon,lat in points array
+      points: [[s.lng, s.lat], [e.lng, e.lat]],
       points_encoded: false
     };
 
-    if(bridgeBlocked){
+    if (blockZoneBlocked && blockZonePolygon) {
       body.custom_model = {
-        areas: { bridge_block: buildBridgeGeoJSON() },
-        priority: [{ if: 'in_bridge_block', multiply_by: 0 }]
+        areas: { block_zone: buildBlockZoneGeoJSON() },
+        priority: [{ if: 'in_block_zone', multiply_by: 0 }]
       };
     }
 
-    // If your server still has CH enabled globally you can add ch.disable=true as a query param
-    const url = 'http://localhost:8989/route?';
-    const params = new URLSearchParams({ profile: profile, points_encoded: 'false' });
-    // include ch.disable if needed (safe to include)
-    params.set('ch.disable', 'true');
+    const url = 'http://localhost:8989/route?profile=' + profile + '&points_encoded=false';
 
-    try{
-      const res = await fetch(url + params.toString(), {
+    try {
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       });
 
-      if(!res.ok){
-        const txt = await res.text();
-        alert('Routing error: ' + res.status + ' — ' + txt);
-        return;
-      }
+      if (!res.ok) return;
 
       const data = await res.json();
-      if(!data.paths || !data.paths.length){ alert('No route found'); return; }
+      if (!data.paths || !data.paths.length) return;
 
-      if(routeLine) map.removeLayer(routeLine);
+      if (routeLine) map.removeLayer(routeLine);
       const coords = data.paths[0].points.coordinates.map(c => [c[1], c[0]]);
-      routeLine = L.polyline(coords, {color:'#1e88e5', weight:5}).addTo(map);
-      map.fitBounds(routeLine.getBounds(), {padding:[40,40]});
+      routeLine = L.polyline(coords, { color: '#1976d2', weight: 5, opacity: 0.8 }).addTo(map);
+      
+      const bounds = L.latLngBounds(coords);
+      map.fitBounds(bounds, { padding: [100, 100] });
 
-      const km = (data.paths[0].distance/1000).toFixed(2);
-      const mins = (data.paths[0].time/60000).toFixed(1);
-      document.getElementById('info').innerHTML = `<strong>Distance:</strong> ${km} km · <strong>ETA:</strong> ${mins} min`;
-
-    }catch(err){
-      alert('Network or server error: ' + err.message);
-    }
+      const km = (data.paths[0].distance / 1000).toFixed(2);
+      const mins = (data.paths[0].time / 60000).toFixed(1);
+      document.getElementById('resultBox').innerHTML = `
+        <div class="result-box">
+          <strong>Route Calculated</strong><br>
+          Distance: <strong>${km} km</strong><br>
+          ETA: <strong>${mins} min</strong>
+        </div>
+      `;
+    } catch (err) {}
   };
-
 </script>
 
 </body>
