@@ -29,31 +29,13 @@ export default function LiveDataPage({ onBack }: BackProps) {
       noWrap: true,
     }).addTo(map);
 
-    const polygonCoordinates: [number, number][] = [
-      [13.208500, 80.316000],
-      [13.205000, 80.322000],
-      [13.192000, 80.318000],
-      [13.195000, 80.308000],
-    ];
-
-    L.polygon(polygonCoordinates, {
-      color: 'red',
-      weight: 3,
-      fillColor: 'red',
-      fillOpacity: 0.2,
-    }).addTo(map);
-
-    const centerLat = (13.208500 + 13.205000 + 13.192000 + 13.195000) / 4;
-    const centerLng = (80.316000 + 80.322000 + 80.318000 + 80.308000) / 4;
-    L.marker([centerLat, centerLng]).addTo(map);
-
     return () => {
       map.remove();
     };
   }, []);
 
   return (
-    <div className="flex-1 flex flex-col w-full h-full">
+    <div className="flex-1 flex flex-col w-full h-full mt-20">
       {/* Header */}
       <div className="px-6 md:px-12 py-8 border-b border-blue-500/20 bg-gradient-to-b from-slate-900 to-slate-950">
         <div className="flex items-center justify-between">
@@ -78,7 +60,11 @@ export default function LiveDataPage({ onBack }: BackProps) {
       </div>
 
       {/* Map Container */}
-      <div ref={mapContainer} className="flex-1 w-full" />
+      <div 
+        ref={mapContainer} 
+        className="flex-1 w-full"
+        style={{ height: "100%", minHeight: "500px" }}
+      />
     </div>
   );
 }

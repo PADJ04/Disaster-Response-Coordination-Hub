@@ -1,6 +1,5 @@
 # ---- GraphHopper ----
 graphhopper/graph-cache/
-graphhopper/southern-zone-251125.osm.pbf
 graphhopper/graphhopper-web-11.0.jar
 
 # ---- OS / Editor files ----
@@ -10,3 +9,6 @@ Desktop.ini
 
 # ---- Logs ----
 *.log
+
+# ---- OSM PBF files ----
+*.osm.pbf
