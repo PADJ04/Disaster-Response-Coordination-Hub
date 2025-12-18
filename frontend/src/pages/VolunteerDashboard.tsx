@@ -16,7 +16,7 @@ type Mission = {
 export default function VolunteerDashboard({ onLogout }: { onLogout: () => void }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [, setError] = useState<string | null>(null);
 
   const [missions] = useState<Mission[]>([
     { id: 'm-1', title: 'Emergency Medical Aid', location: 'North Sector', distance: '2.5 km', description: 'Provide medical assistance to affected residents', volunteers_needed: 5 },

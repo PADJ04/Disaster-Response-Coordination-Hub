@@ -53,13 +53,13 @@ export default function LoginPage({ onNavigate, onLogin }: LoginProps) {
     }
   };
 
-  const roleColor = role === 'district' ? 'blue' : 'teal';
+  // const roleColor = role === 'district' ? 'blue' : 'teal';
   const borderColor = role === 'district' ? 'border-blue-500/30' : 'border-teal-500/30';
   const shadowColor = role === 'district' ? 'shadow-[0_0_50px_rgba(59,130,246,0.1)]' : 'shadow-[0_0_50px_rgba(20,184,166,0.1)]';
   const gradientFrom = role === 'district' ? 'from-blue-500' : 'from-teal-500';
   const gradientTo = role === 'district' ? 'to-blue-600' : 'to-teal-600';
   const accentColor = role === 'district' ? 'text-blue-400' : 'text-teal-400';
-  const bgAccent = role === 'district' ? 'bg-blue-500/20' : 'bg-teal-500/20';
+  // const bgAccent = role === 'district' ? 'bg-blue-500/20' : 'bg-teal-500/20';
   const iconBg = role === 'district' ? 'bg-blue-500/20' : 'bg-teal-500/20';
   const icon = role === 'district' ? <LogIn className="w-10 h-10 text-blue-400" /> : <UserPlus className="w-10 h-10 text-teal-400" />;
 

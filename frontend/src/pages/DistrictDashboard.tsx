@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Trash2, Edit2, Plus, Eye, LogOut, ClipboardList, MapPin } from 'lucide-react';
+import { Trash2, Plus, LogOut } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import Modal from '../components/Modal';
 import api, { createTask } from '../api';
@@ -64,12 +64,12 @@ export default function DistrictDashboard({ onLogout }: { onLogout: () => void }
   const [rescueCenters, setRescueCenters] = useState<RescueCenter[]>([]);
   const [reports, setReports] = useState<IncidentReport[]>([]);
   const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
-  const [loading, setLoading] = useState(true);
+  // const [loading, setLoading] = useState(true);
 
   const [isRescueModalOpen, setIsRescueModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isVolunteerViewOpen, setIsVolunteerViewOpen] = useState(false);
-  const [editingRescue, setEditingRescue] = useState<RescueCenter | null>(null);
+  // const [editingRescue, setEditingRescue] = useState<RescueCenter | null>(null);
   const [editingReport, setEditingReport] = useState<IncidentReport | null>(null);
 
   // Task Assignment
@@ -102,7 +102,7 @@ export default function DistrictDashboard({ onLogout }: { onLogout: () => void }
       } catch (err) {
         console.error("Failed to fetch dashboard data", err);
       } finally {
-        setLoading(false);
+        // setLoading(false);
       }
     };
     fetchData();
@@ -154,7 +154,7 @@ export default function DistrictDashboard({ onLogout }: { onLogout: () => void }
     setRescueCapacity('');
     setRescueContact('');
     setRescueLocation(null);
-    setEditingRescue(null);
+    // setEditingRescue(null);
   };
 
   const handleAssignTask = async () => {

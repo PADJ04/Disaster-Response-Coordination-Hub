@@ -81,7 +81,7 @@ export default function App() {
 
       {/* Fixed Bottom Action Dock */}
       {location.pathname === '/' && (
-        <ActionDock activeTab={location.pathname === '/' ? 'home' : location.pathname.substring(1) as TabType} setActiveTab={handleNavigate} />
+        <ActionDock activeTab={location.pathname === '/' ? 'home' : (location.pathname as string).substring(1) as TabType} setActiveTab={handleNavigate} />
       )}
     </div>
   );

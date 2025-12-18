@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { ArrowRight, HeartHandshake } from 'lucide-react';
-import InputGroup from '../components/InputGroup';
 import type { BackProps } from '../types';
 import api from '../api';
 

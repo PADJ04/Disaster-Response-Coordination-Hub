@@ -69,6 +69,23 @@ def delete_report(report_id: str, db: Session = Depends(get_db)):
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
     
+    # Unlink tasks associated with this report
+    tasks = db.query(models.Task).filter(models.Task.report_id == report_id).all()
+    for task in tasks:
+        task.report_id = None
+        
+    # Delete associated images from disk
+    for image in report.images:
+        # image_url is like "/uploads/filename.ext"
+        if image.image_url.startswith("/uploads/"):
+            filename = image.image_url.replace("/uploads/", "")
+            file_path = os.path.join("uploads", filename)
+            if os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                except Exception as e:
+                    print(f"Error deleting file {file_path}: {e}")
+    
     db.delete(report)
     db.commit()
     return {"message": "Report deleted successfully"}
