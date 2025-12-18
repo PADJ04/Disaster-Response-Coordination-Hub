@@ -1,5 +1,5 @@
 graphhopper:
-  datareader.file: southern-zone-251209.osm.pbf
+  datareader.file: southern-zone-251215.osm.pbf
   graph.location: graph-cache
 
   ch.disable: true

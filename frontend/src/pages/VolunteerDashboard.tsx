@@ -1,14 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Edit2, MapPin } from 'lucide-react';
 import Modal from '../components/Modal';
-
-type Task = {
-  id: string;
-  title: string;
-  description: string;
-  assignedAt: string;
-  status: 'pending' | 'in-progress' | 'done';
-};
+import { getTasks, updateTaskStatus as apiUpdateTaskStatus } from '../api';
+import type { Task } from '../types';
 
 type Mission = {
   id: string;
@@ -20,10 +14,9 @@ type Mission = {
 };
 
 export default function VolunteerDashboard({ onLogout }: { onLogout: () => void }) {
-  const [tasks, setTasks] = useState<Task[]>([
-    { id: 't-1', title: 'Distribute Relief Kits', description: 'Distribute relief kits to affected families in North sector', assignedAt: '2025-12-02 10:00', status: 'pending' },
-    { id: 't-2', title: 'Survey Damage', description: 'Survey and document damage in residential area', assignedAt: '2025-12-01 14:30', status: 'in-progress' },
-  ]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [missions] = useState<Mission[]>([
     { id: 'm-1', title: 'Emergency Medical Aid', location: 'North Sector', distance: '2.5 km', description: 'Provide medical assistance to affected residents', volunteers_needed: 5 },
@@ -33,7 +26,24 @@ export default function VolunteerDashboard({ onLogout }: { onLogout: () => void 
 
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [taskStatus, setTaskStatus] = useState<'pending' | 'in-progress' | 'done'>('pending');
+  const [taskStatus, setTaskStatus] = useState<'assigned' | 'accepted' | 'rejected' | 'completed'>('assigned');
+
+  useEffect(() => {
+    const fetchTasks = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        const data = await getTasks(token);
+        setTasks(data);
+      } catch (err) {
+        console.error("Failed to fetch tasks", err);
+        setError("Failed to load tasks");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchTasks();
+  }, []);
 
   const openTaskModal = (task: Task) => {
     setEditingTask(task);
@@ -41,21 +51,27 @@ export default function VolunteerDashboard({ onLogout }: { onLogout: () => void 
     setIsTaskModalOpen(true);
   };
 
-  const updateTaskStatus = () => {
+  const handleUpdateTaskStatus = async () => {
     if (editingTask) {
-      setTasks(tasks.map(t => t.id === editingTask.id ? {
-        ...t,
-        status: taskStatus,
-      } : t));
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        const updatedTask = await apiUpdateTaskStatus(editingTask.id, taskStatus, token);
+        setTasks(tasks.map(t => t.id === updatedTask.id ? updatedTask : t));
+        setIsTaskModalOpen(false);
+      } catch (err) {
+        console.error("Failed to update task", err);
+        alert("Failed to update task status");
+      }
     }
-    setIsTaskModalOpen(false);
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pending': return 'bg-blue-500/20 text-blue-300 border-blue-500/30';
-      case 'in-progress': return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30';
-      case 'done': return 'bg-green-500/20 text-green-300 border-green-500/30';
+      case 'assigned': return 'bg-blue-500/20 text-blue-300 border-blue-500/30';
+      case 'accepted': return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30';
+      case 'rejected': return 'bg-red-500/20 text-red-300 border-red-500/30';
+      case 'completed': return 'bg-green-500/20 text-green-300 border-green-500/30';
       default: return 'bg-white/10 text-white/70';
     }
   };
@@ -79,9 +95,9 @@ export default function VolunteerDashboard({ onLogout }: { onLogout: () => void 
             <h3 className="text-sm font-bold text-teal-300 uppercase tracking-wider mb-2">Assigned Tasks</h3>
             <p className="text-3xl font-bold text-white">{tasks.length}</p>
             <div className="mt-4 flex gap-2 text-xs">
-              <span className="px-2 py-1 bg-blue-500/20 text-blue-300 rounded">{tasks.filter(t => t.status === 'pending').length} Pending</span>
-              <span className="px-2 py-1 bg-yellow-500/20 text-yellow-300 rounded">{tasks.filter(t => t.status === 'in-progress').length} In Progress</span>
-              <span className="px-2 py-1 bg-green-500/20 text-green-300 rounded">{tasks.filter(t => t.status === 'done').length} Done</span>
+              <span className="px-2 py-1 bg-blue-500/20 text-blue-300 rounded">{tasks.filter(t => t.status === 'assigned').length} Assigned</span>
+              <span className="px-2 py-1 bg-yellow-500/20 text-yellow-300 rounded">{tasks.filter(t => t.status === 'accepted').length} Accepted</span>
+              <span className="px-2 py-1 bg-green-500/20 text-green-300 rounded">{tasks.filter(t => t.status === 'completed').length} Completed</span>
             </div>
           </div>
 
@@ -96,7 +112,9 @@ export default function VolunteerDashboard({ onLogout }: { onLogout: () => void 
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-white mb-4">Assigned Tasks</h2>
           <div className="space-y-3">
-            {tasks.length === 0 ? (
+            {loading ? (
+               <div className="p-6 text-center text-white/60 bg-white/5 border border-white/10 rounded-lg">Loading tasks...</div>
+            ) : tasks.length === 0 ? (
               <div className="p-6 text-center text-white/60 bg-white/5 border border-white/10 rounded-lg">No assigned tasks yet</div>
             ) : (
               tasks.map((task) => (
@@ -108,9 +126,12 @@ export default function VolunteerDashboard({ onLogout }: { onLogout: () => void 
                         <span className={`text-xs px-3 py-1 rounded-full border font-medium ${getStatusColor(task.status)}`}>
                           {task.status}
                         </span>
+                        <span className={`text-xs px-2 py-0.5 rounded border border-white/10 text-white/50`}>
+                          {task.priority}
+                        </span>
                       </div>
                       <p className="text-sm text-white/70">{task.description}</p>
-                      <p className="text-xs text-white/50 mt-2">Assigned: {task.assignedAt}</p>
+                      <p className="text-xs text-white/50 mt-2">Assigned: {new Date(task.created_at).toLocaleString()}</p>
                     </div>
                     <button onClick={() => openTaskModal(task)} className="p-2 bg-teal-500/20 border border-teal-500/30 rounded-lg text-teal-300 hover:bg-teal-500/30 transition">
                       <Edit2 className="w-4 h-4" />
@@ -166,13 +187,14 @@ export default function VolunteerDashboard({ onLogout }: { onLogout: () => void 
           <div>
             <label className="text-xs font-bold text-white/60 uppercase tracking-wider mb-2 block">Status</label>
             <select value={taskStatus} onChange={(e) => setTaskStatus(e.target.value as any)} className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white focus:border-white/30 focus:outline-none transition">
-              <option value="pending">Pending</option>
-              <option value="in-progress">In Progress</option>
-              <option value="done">Done</option>
+              <option value="assigned">Assigned</option>
+              <option value="accepted">Accepted</option>
+              <option value="rejected">Rejected</option>
+              <option value="completed">Completed</option>
             </select>
           </div>
           <div className="flex gap-3 mt-6">
-            <button onClick={updateTaskStatus} className="flex-1 py-3 bg-gradient-to-r from-teal-500 to-teal-600 rounded-lg font-bold text-white hover:scale-[1.02] transition-transform">
+            <button onClick={handleUpdateTaskStatus} className="flex-1 py-3 bg-gradient-to-r from-teal-500 to-teal-600 rounded-lg font-bold text-white hover:scale-[1.02] transition-transform">
               Update Status
             </button>
             <button onClick={() => setIsTaskModalOpen(false)} className="flex-1 py-3 bg-transparent border border-white/10 rounded-lg font-bold text-white/80 hover:bg-white/5 transition">

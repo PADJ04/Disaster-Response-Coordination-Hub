@@ -1,6 +1,34 @@
-import { useState } from 'react';
-import { Trash2, Edit2, Plus, Eye } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Trash2, Edit2, Plus, Eye, LogOut, ClipboardList, MapPin } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import Modal from '../components/Modal';
+import api, { createTask } from '../api';
+import L from 'leaflet';
+
+// Fix for default marker icon
+import icon from 'leaflet/dist/images/marker-icon.png';
+import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+
+let DefaultIcon = L.icon({
+    iconUrl: icon,
+    shadowUrl: iconShadow,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41]
+});
+
+L.Marker.prototype.options.icon = DefaultIcon;
+
+function LocationMarker({ position, setPosition }: { position: { lat: number, lng: number } | null, setPosition: (pos: { lat: number, lng: number }) => void }) {
+  useMapEvents({
+    click(e) {
+      setPosition(e.latlng);
+    },
+  });
+
+  return position === null ? null : (
+    <Marker position={position}></Marker>
+  );
+}
 
 type RescueCenter = {
   id: string;
@@ -8,37 +36,35 @@ type RescueCenter = {
   address: string;
   capacity?: number;
   contact?: string;
+  latitude?: number;
+  longitude?: number;
 };
 
 type IncidentReport = {
   id: string;
   title: string;
   description: string;
-  reportedAt: string;
+  created_at: string;
   status: 'new' | 'in-progress' | 'resolved';
+  severity: string;
+  latitude: number;
+  longitude: number;
+  images: { id: string; image_url: string }[];
 };
 
 type Volunteer = {
   id: string;
   name: string;
-  phone?: string;
-  area?: string;
+  phone: string;
+  email: string;
+  address?: string;
 };
 
 export default function DistrictDashboard({ onLogout }: { onLogout: () => void }) {
-  const [rescueCenters, setRescueCenters] = useState<RescueCenter[]>([
-    { id: 'rc-1', name: 'Central Shelter', address: '12 Main St', capacity: 250, contact: '555-0101' },
-  ]);
-
-  const [reports, setReports] = useState<IncidentReport[]>([
-    { id: 'r-1', title: 'Flooded Road', description: 'Water levels high on River Road', reportedAt: '2025-12-02 14:23', status: 'new' },
-    { id: 'r-2', title: 'Collapsed Wall', description: 'Partial wall collapse near Market', reportedAt: '2025-12-01 09:12', status: 'in-progress' },
-  ]);
-
-  const [volunteers] = useState<Volunteer[]>([
-    { id: 'v-1', name: 'Asha Kumar', phone: '555-0111', area: 'North' },
-    { id: 'v-2', name: 'Ravi Singh', phone: '555-0112', area: 'East' },
-  ]);
+  const [rescueCenters, setRescueCenters] = useState<RescueCenter[]>([]);
+  const [reports, setReports] = useState<IncidentReport[]>([]);
+  const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [isRescueModalOpen, setIsRescueModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
@@ -46,319 +72,412 @@ export default function DistrictDashboard({ onLogout }: { onLogout: () => void }
   const [editingRescue, setEditingRescue] = useState<RescueCenter | null>(null);
   const [editingReport, setEditingReport] = useState<IncidentReport | null>(null);
 
+  // Task Assignment
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [selectedVolunteer, setSelectedVolunteer] = useState<Volunteer | null>(null);
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskDescription, setTaskDescription] = useState('');
+  const [taskPriority, setTaskPriority] = useState('medium');
+
   // Rescue Center form
   const [rescueName, setRescueName] = useState('');
   const [rescueAddress, setRescueAddress] = useState('');
-  const [rescueCapacity, setRescueCapacity] = useState<number | ''>('');
+  const [rescueCapacity, setRescueCapacity] = useState('');
   const [rescueContact, setRescueContact] = useState('');
-  const [rescueError, setRescueError] = useState<string | null>(null);
+  const [rescueLocation, setRescueLocation] = useState<{ lat: number, lng: number } | null>(null);
 
-  // Report form
-  const [reportTitle, setReportTitle] = useState('');
-  const [reportDesc, setReportDesc] = useState('');
-  const [reportStatus, setReportStatus] = useState<'new' | 'in-progress' | 'resolved'>('new');
-  const [reportError, setReportError] = useState<string | null>(null);
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const [volRes, repRes, resRes] = await Promise.all([
+          api.get('/auth/volunteers', { headers }),
+          api.get('/reports/', { headers }),
+          api.get('/resources/rescue-centers/', { headers })
+        ]);
+        setVolunteers(volRes.data || []);
+        setReports(repRes.data || []);
+        setRescueCenters(resRes.data || []);
+      } catch (err) {
+        console.error("Failed to fetch dashboard data", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
 
-  // Rescue Center CRUD
-  const openRescueModal = (center?: RescueCenter) => {
-    if (center) {
-      setEditingRescue(center);
-      setRescueName(center.name);
-      setRescueAddress(center.address);
-      setRescueCapacity(center.capacity || '');
-      setRescueContact(center.contact || '');
-    } else {
-      setEditingRescue(null);
-      setRescueName('');
-      setRescueAddress('');
-      setRescueCapacity('');
-      setRescueContact('');
-    }
-    setRescueError(null);
-    setIsRescueModalOpen(true);
-  };
-
-  const saveRescueCenter = () => {
-    setRescueError(null);
-    if (!rescueName.trim() || !rescueAddress.trim()) {
-      setRescueError('Name and address are required');
+  const handleAddRescueCenter = async () => {
+    if (!rescueName || !rescueAddress || !rescueLocation) {
+      alert("Please fill in all fields and select a location on the map.");
       return;
     }
-
-    if (editingRescue) {
-      setRescueCenters(rescueCenters.map(c => c.id === editingRescue.id ? {
-        id: c.id,
-        name: rescueName.trim(),
-        address: rescueAddress.trim(),
-        capacity: rescueCapacity ? Number(rescueCapacity) : undefined,
-        contact: rescueContact.trim() || undefined,
-      } : c));
-    } else {
-      const newCenter: RescueCenter = {
-        id: `rc-${Date.now()}`,
-        name: rescueName.trim(),
-        address: rescueAddress.trim(),
-        capacity: rescueCapacity ? Number(rescueCapacity) : undefined,
-        contact: rescueContact.trim() || undefined,
+    try {
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const payload = {
+        name: rescueName,
+        address: rescueAddress,
+        capacity: parseInt(rescueCapacity) || 0,
+        contact: rescueContact,
+        latitude: rescueLocation.lat,
+        longitude: rescueLocation.lng
       };
-      setRescueCenters([newCenter, ...rescueCenters]);
+      
+      const res = await api.post('/resources/rescue-centers/', payload, { headers });
+      setRescueCenters([...rescueCenters, res.data]);
+      setIsRescueModalOpen(false);
+      resetRescueForm();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to add rescue center");
     }
-    setIsRescueModalOpen(false);
   };
 
-  const deleteRescueCenter = (id: string) => {
-    setRescueCenters(rescueCenters.filter(c => c.id !== id));
+  const handleDeleteReport = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this report?")) return;
+    try {
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      await api.delete(`/reports/${id}`, { headers });
+      setReports(reports.filter(r => r.id !== id));
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete report");
+    }
   };
 
-  // Report CRUD
-  const openReportModal = (report?: IncidentReport) => {
-    if (report) {
-      setEditingReport(report);
-      setReportTitle(report.title);
-      setReportDesc(report.description);
-      setReportStatus(report.status);
-    } else {
-      setEditingReport(null);
-      setReportTitle('');
-      setReportDesc('');
-      setReportStatus('new');
-    }
-    setReportError(null);
-    setIsReportModalOpen(true);
+  const resetRescueForm = () => {
+    setRescueName('');
+    setRescueAddress('');
+    setRescueCapacity('');
+    setRescueContact('');
+    setRescueLocation(null);
+    setEditingRescue(null);
   };
 
-  const saveReport = () => {
-    setReportError(null);
-    if (!reportTitle.trim() || !reportDesc.trim()) {
-      setReportError('Title and description are required');
-      return;
-    }
+  const handleAssignTask = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return alert('Not authenticated');
 
-    if (editingReport) {
-      setReports(reports.map(r => r.id === editingReport.id ? {
-        id: r.id,
-        title: reportTitle.trim(),
-        description: reportDesc.trim(),
-        reportedAt: r.reportedAt,
-        status: reportStatus,
-      } : r));
-    } else {
-      const newReport: IncidentReport = {
-        id: `r-${Date.now()}`,
-        title: reportTitle.trim(),
-        description: reportDesc.trim(),
-        reportedAt: new Date().toLocaleString(),
-        status: reportStatus,
+      const volunteerId = selectedVolunteer?.id;
+      if (!volunteerId) return alert('Select a volunteer');
+
+      const payload: any = {
+        title: taskTitle,
+        description: taskDescription,
+        priority: taskPriority,
+        volunteer_id: volunteerId,
       };
-      setReports([newReport, ...reports]);
-    }
-    setIsReportModalOpen(false);
-  };
+      if (editingReport) payload.report_id = editingReport.id;
 
-  const deleteReport = (id: string) => {
-    setReports(reports.filter(r => r.id !== id));
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'new': return 'bg-red-500/20 text-red-300 border-red-500/30';
-      case 'in-progress': return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30';
-      case 'resolved': return 'bg-green-500/20 text-green-300 border-green-500/30';
-      default: return 'bg-white/10 text-white/70';
+      await createTask(payload, token);
+      alert('Task assigned successfully');
+      setIsTaskModalOpen(false);
+      setTaskTitle('');
+      setTaskDescription('');
+      setSelectedVolunteer(null);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to assign task');
     }
   };
+
+  const openAssignTaskModal = (volunteer?: Volunteer, report?: IncidentReport) => {
+    if (volunteer) setSelectedVolunteer(volunteer);
+    if (report) setEditingReport(report);
+    setIsTaskModalOpen(true);
+  };
+  
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-start px-6 md:px-12 pt-12 animate-fade-in pb-24">
-      <div className="w-full max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
+    <div className="min-h-screen bg-black text-white p-6">
+      <div className="max-w-7xl mx-auto space-y-8">
+        
+        {/* Header */}
+        <div className="flex justify-between items-center bg-blue-900/20 p-6 rounded-2xl border border-blue-500/30">
           <div>
-            <h1 className="text-4xl font-bold text-white mb-2">District Authority Dashboard</h1>
-            <p className="text-white/60">Manage rescue centers, volunteers and incident reports</p>
+            <h1 className="text-3xl font-bold text-blue-400">District Command Center</h1>
+            <p className="text-blue-200/60">Overview of resources and incidents</p>
           </div>
-          <button onClick={onLogout} className="px-4 py-2 bg-red-600/20 border border-red-500/30 rounded-lg text-red-300 hover:bg-red-600/30 transition">
-            Logout
-          </button>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <div className="p-6 bg-blue-500/10 border border-blue-500/30 rounded-2xl">
-            <h3 className="text-sm font-bold text-blue-300 uppercase tracking-wider mb-2">Rescue Centers</h3>
-            <p className="text-3xl font-bold text-white mb-4">{rescueCenters.length}</p>
-            <button onClick={() => openRescueModal()} className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg text-white font-medium hover:scale-[1.02] transition-transform flex items-center gap-2">
-              <Plus className="w-4 h-4" /> Add Center
+          <div className="flex gap-3">
+            <button onClick={() => setIsRescueModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors">
+              <Plus className="w-4 h-4" /> Add Rescue Center
             </button>
-          </div>
-
-          <div className="p-6 bg-teal-500/10 border border-teal-500/30 rounded-2xl">
-            <h3 className="text-sm font-bold text-teal-300 uppercase tracking-wider mb-2">Volunteers</h3>
-            <p className="text-3xl font-bold text-white mb-4">{volunteers.length}</p>
-            <button onClick={() => setIsVolunteerViewOpen(true)} className="px-4 py-2 bg-gradient-to-r from-teal-500 to-teal-600 rounded-lg text-white font-medium hover:scale-[1.02] transition-transform flex items-center gap-2">
-              <Eye className="w-4 h-4" /> View All
-            </button>
-          </div>
-
-          <div className="p-6 bg-orange-500/10 border border-orange-500/30 rounded-2xl">
-            <h3 className="text-sm font-bold text-orange-300 uppercase tracking-wider mb-2">Incident Reports</h3>
-            <p className="text-3xl font-bold text-white mb-4">{reports.length}</p>
-            <button onClick={() => openReportModal()} className="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg text-white font-medium hover:scale-[1.02] transition-transform flex items-center gap-2">
-              <Plus className="w-4 h-4" /> Add Report
+            <button onClick={onLogout} className="flex items-center gap-2 px-4 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors">
+              <LogOut className="w-4 h-4" /> Logout
             </button>
           </div>
         </div>
 
-        {/* Rescue Centers Section */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-white mb-4">Rescue Centers</h2>
-          <div className="space-y-3">
-            {rescueCenters.length === 0 ? (
-              <div className="p-6 text-center text-white/60 bg-white/5 border border-white/10 rounded-lg">No rescue centers yet</div>
-            ) : (
-              rescueCenters.map((center) => (
-                <div key={center.id} className="p-4 bg-black/40 border border-blue-500/20 rounded-lg hover:border-blue-500/40 transition">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <h3 className="font-bold text-white text-lg">{center.name}</h3>
-                      <p className="text-sm text-white/70 mt-1">{center.address}</p>
-                      <div className="flex gap-4 mt-2 text-sm text-white/60">
-                        {center.capacity && <span>Capacity: {center.capacity}</span>}
-                        {center.contact && <span>Contact: {center.contact}</span>}
-                      </div>
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-gray-900/50 p-6 rounded-2xl border border-white/10">
+            <h3 className="text-gray-400 text-sm uppercase tracking-wider">Active Incidents</h3>
+            <p className="text-4xl font-bold text-white mt-2">{reports.length}</p>
+          </div>
+          <div className="bg-gray-900/50 p-6 rounded-2xl border border-white/10">
+            <h3 className="text-gray-400 text-sm uppercase tracking-wider">Rescue Centers</h3>
+            <p className="text-4xl font-bold text-white mt-2">{rescueCenters.length}</p>
+          </div>
+          <div className="bg-gray-900/50 p-6 rounded-2xl border border-white/10">
+            <h3 className="text-gray-400 text-sm uppercase tracking-wider">Volunteers</h3>
+            <p className="text-4xl font-bold text-white mt-2">{volunteers.length}</p>
+          </div>
+        </div>
+
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          
+          {/* Incident Reports */}
+          <div className="bg-gray-900/50 rounded-2xl border border-white/10 overflow-hidden">
+            <div className="p-6 border-b border-white/10 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-white">Incident Reports</h2>
+            </div>
+            <div className="p-6 space-y-4 max-h-[400px] overflow-y-auto">
+              {reports.map(report => (
+                <div key={report.id} className="bg-black/40 p-4 rounded-xl border border-white/5 hover:border-white/20 transition-colors">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <h3 className="font-bold text-white">{report.title}</h3>
+                      <div className="text-xs text-gray-400">{new Date(report.created_at).toLocaleString()}</div>
                     </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => openRescueModal(center)} className="p-2 bg-blue-500/20 border border-blue-500/30 rounded-lg text-blue-300 hover:bg-blue-500/30 transition">
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => deleteRescueCenter(center.id)} className="p-2 bg-red-500/20 border border-red-500/30 rounded-lg text-red-300 hover:bg-red-500/30 transition">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-1 rounded text-xs font-bold ${
+                        report.status === 'new' ? 'bg-red-500/20 text-red-400' :
+                        report.status === 'in-progress' ? 'bg-yellow-500/20 text-yellow-400' :
+                        'bg-green-500/20 text-green-400'
+                      }`}>
+                        {report.status.toUpperCase()}
+                      </span>
+                      <button onClick={() => { setEditingReport(report); setIsReportModalOpen(true); }} className="text-xs px-2 py-1 bg-white/5 rounded text-white/70 border border-white/10">View</button>
+                      <button onClick={() => { setEditingReport(report); openAssignTaskModal(undefined, report); }} className="text-xs px-2 py-1 bg-blue-500/20 text-blue-300 rounded border border-blue-500/30">Assign Task</button>
+                      <button onClick={() => handleDeleteReport(report.id)} className="text-xs px-2 py-1 bg-red-500/20 text-red-300 rounded border border-red-500/30"><Trash2 className="w-3 h-3" /></button>
                     </div>
                   </div>
+                  <p className="text-gray-400 text-sm mb-3">{report.description}</p>
+                  <div className="flex justify-between items-center text-xs text-gray-500 mt-2">
+                    <span>Severity: {report.severity}</span>
+                  </div>
+                  {report.images && report.images.length > 0 && (
+                    <div className="mt-3 flex gap-2 overflow-x-auto pb-2">
+                      {report.images.map((img) => (
+                        <img 
+                          key={img.id} 
+                          src={`http://localhost:8000${img.image_url}`} 
+                          alt="Evidence" 
+                          className="w-16 h-16 object-cover rounded-lg border border-white/10"
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
-              ))
-            )}
+              ))}
+              {reports.length === 0 && <p className="text-gray-500 text-center py-4">No active reports</p>}
+            </div>
           </div>
-        </div>
 
-        {/* Reports Section */}
-        <div>
-          <h2 className="text-2xl font-bold text-white mb-4">Incident Reports</h2>
-          <div className="space-y-3">
-            {reports.length === 0 ? (
-              <div className="p-6 text-center text-white/60 bg-white/5 border border-white/10 rounded-lg">No reports yet</div>
-            ) : (
-              reports.map((report) => (
-                <div key={report.id} className="p-4 bg-black/40 border border-orange-500/20 rounded-lg hover:border-orange-500/40 transition">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="font-bold text-white text-lg">{report.title}</h3>
-                        <span className={`text-xs px-3 py-1 rounded-full border font-medium ${getStatusColor(report.status)}`}>
-                          {report.status}
-                        </span>
-                      </div>
-                      <p className="text-sm text-white/70">{report.description}</p>
-                      <p className="text-xs text-white/50 mt-2">{report.reportedAt}</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => openReportModal(report)} className="p-2 bg-blue-500/20 border border-blue-500/30 rounded-lg text-blue-300 hover:bg-blue-500/30 transition">
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => deleteReport(report.id)} className="p-2 bg-red-500/20 border border-red-500/30 rounded-lg text-red-300 hover:bg-red-500/30 transition">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+          {/* Volunteers */}
+          <div className="bg-gray-900/50 rounded-2xl border border-white/10 overflow-hidden">
+            <div className="p-6 border-b border-white/10 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-white">Volunteers</h2>
+              <button onClick={() => setIsVolunteerViewOpen(true)} className="text-blue-400 hover:text-blue-300 text-sm font-bold">View All</button>
+            </div>
+            <div className="p-6 space-y-4 max-h-[400px] overflow-y-auto">
+              {volunteers.slice(0, 5).map(vol => (
+                <div key={vol.id} className="flex items-center justify-between bg-black/40 p-4 rounded-xl border border-white/5">
+                  <div>
+                    <h3 className="font-bold text-white">{vol.name}</h3>
+                    <p className="text-gray-400 text-sm">{vol.phone}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-gray-500 text-xs">{vol.address || 'No address'}</p>
                   </div>
                 </div>
-              ))
-            )}
+              ))}
+              {volunteers.length === 0 && <p className="text-gray-500 text-center py-4">No volunteers registered</p>}
+            </div>
           </div>
+
         </div>
       </div>
 
       {/* Rescue Center Modal */}
-      <Modal open={isRescueModalOpen} onClose={() => setIsRescueModalOpen(false)} title={editingRescue ? 'Edit Rescue Center' : 'Add Rescue Center'}>
+      <Modal open={isRescueModalOpen} onClose={() => setIsRescueModalOpen(false)} title="Add Rescue Center">
         <div className="space-y-4">
           <div>
-            <label className="text-xs font-bold text-white/60 uppercase tracking-wider mb-2 block">Center Name</label>
-            <input value={rescueName} onChange={(e) => setRescueName(e.target.value)} placeholder="e.g. Central Shelter" className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none transition" />
+            <label className="block text-sm font-medium text-gray-400 mb-1">Name</label>
+            <input 
+              type="text" 
+              value={rescueName}
+              onChange={(e) => setRescueName(e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none"
+              placeholder="Center Name"
+            />
           </div>
           <div>
-            <label className="text-xs font-bold text-white/60 uppercase tracking-wider mb-2 block">Address</label>
-            <input value={rescueAddress} onChange={(e) => setRescueAddress(e.target.value)} placeholder="e.g. 12 Main St" className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none transition" />
+            <label className="block text-sm font-medium text-gray-400 mb-1">Address</label>
+            <input 
+              type="text" 
+              value={rescueAddress}
+              onChange={(e) => setRescueAddress(e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none"
+              placeholder="Address"
+            />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-bold text-white/60 uppercase tracking-wider mb-2 block">Capacity</label>
-              <input value={rescueCapacity} onChange={(e) => setRescueCapacity(e.target.value === '' ? '' : Number(e.target.value))} placeholder="e.g. 250" type="number" className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none transition" />
+              <label className="block text-sm font-medium text-gray-400 mb-1">Capacity</label>
+              <input 
+                type="number" 
+                value={rescueCapacity}
+                onChange={(e) => setRescueCapacity(e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none"
+                placeholder="Capacity"
+              />
             </div>
             <div>
-              <label className="text-xs font-bold text-white/60 uppercase tracking-wider mb-2 block">Contact</label>
-              <input value={rescueContact} onChange={(e) => setRescueContact(e.target.value)} placeholder="e.g. 555-0101" className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none transition" />
+              <label className="block text-sm font-medium text-gray-400 mb-1">Contact</label>
+              <input 
+                type="text" 
+                value={rescueContact}
+                onChange={(e) => setRescueContact(e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none"
+                placeholder="Phone/Email"
+              />
             </div>
           </div>
-          {rescueError && <div className="text-sm text-red-400 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">{rescueError}</div>}
-          <div className="flex gap-3 mt-6">
-            <button onClick={saveRescueCenter} className="flex-1 py-3 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg font-bold text-white hover:scale-[1.02] transition-transform">
-              {editingRescue ? 'Update' : 'Add'} Center
-            </button>
-            <button onClick={() => setIsRescueModalOpen(false)} className="flex-1 py-3 bg-transparent border border-white/10 rounded-lg font-bold text-white/80 hover:bg-white/5 transition">
-              Cancel
-            </button>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-1">Location (Click on map)</label>
+            <div className="h-64 w-full rounded-lg overflow-hidden border border-white/10">
+               <MapContainer center={[20.5937, 78.9629]} zoom={5} style={{ height: '100%', width: '100%' }}>
+                  <TileLayer
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  />
+                  <LocationMarker position={rescueLocation} setPosition={setRescueLocation} />
+               </MapContainer>
+            </div>
+            {rescueLocation && <p className="text-xs text-green-400 mt-1">Location selected: {rescueLocation.lat.toFixed(4)}, {rescueLocation.lng.toFixed(4)}</p>}
           </div>
+
+          <button 
+            onClick={handleAddRescueCenter}
+            className="w-full py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-bold text-white transition-colors mt-4"
+          >
+            Add Rescue Center
+          </button>
         </div>
       </Modal>
 
-      {/* Volunteers View Modal */}
-      <Modal open={isVolunteerViewOpen} onClose={() => setIsVolunteerViewOpen(false)} title={`Volunteers (${volunteers.length})`}>
-        <div className="space-y-3">
-          {volunteers.length === 0 ? (
-            <div className="p-6 text-center text-white/60">No volunteers yet</div>
-          ) : (
-            volunteers.map((volunteer) => (
-              <div key={volunteer.id} className="p-4 bg-black/40 border border-teal-500/20 rounded-lg">
-                <h3 className="font-bold text-white text-lg">{volunteer.name}</h3>
-                <div className="flex gap-4 mt-2 text-sm text-white/60">
-                  {volunteer.area && <span>Area: {volunteer.area}</span>}
-                  {volunteer.phone && <span>Phone: {volunteer.phone}</span>}
+      {/* Volunteers Modal */}
+      <Modal open={isVolunteerViewOpen} onClose={() => setIsVolunteerViewOpen(false)} title="All Volunteers">
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+          {volunteers.map(vol => (
+            <div key={vol.id} className="bg-white/5 p-4 rounded-xl border border-white/10">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-gray-500 uppercase">Name</label>
+                  <p className="font-bold">{vol.name}</p>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 uppercase">Phone</label>
+                  <p>{vol.phone}</p>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 uppercase">Email</label>
+                  <p>{vol.email}</p>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 uppercase">Address</label>
+                  <p>{vol.address || 'N/A'}</p>
                 </div>
               </div>
-            ))
-          )}
+              <button onClick={() => { setIsVolunteerViewOpen(false); openAssignTaskModal(vol); }} className="w-full mt-4 py-2 bg-blue-600/20 border border-blue-500/30 text-blue-300 rounded-lg hover:bg-blue-600/30 transition font-bold">
+                Assign Task
+              </button>
+            </div>
+          ))}
         </div>
       </Modal>
 
-      {/* Report Modal */}
-      <Modal open={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} title={editingReport ? 'Edit Report' : 'Add Report'}>
+      {/* Report Details Modal */}
+      <Modal open={isReportModalOpen} onClose={() => { setIsReportModalOpen(false); setEditingReport(null); }} title={editingReport?.title}>
         <div className="space-y-4">
-          <div>
-            <label className="text-xs font-bold text-white/60 uppercase tracking-wider mb-2 block">Title</label>
-            <input value={reportTitle} onChange={(e) => setReportTitle(e.target.value)} placeholder="e.g. Flooded Road" className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none transition" />
-          </div>
-          <div>
-            <label className="text-xs font-bold text-white/60 uppercase tracking-wider mb-2 block">Description</label>
-            <textarea value={reportDesc} onChange={(e) => setReportDesc(e.target.value)} placeholder="Describe the incident..." rows={4} className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none transition resize-none" />
-          </div>
-          <div>
-            <label className="text-xs font-bold text-white/60 uppercase tracking-wider mb-2 block">Status</label>
-            <select value={reportStatus} onChange={(e) => setReportStatus(e.target.value as any)} className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white focus:border-white/30 focus:outline-none transition">
-              <option value="new">New</option>
-              <option value="in-progress">In Progress</option>
-              <option value="resolved">Resolved</option>
-            </select>
-          </div>
-          {reportError && <div className="text-sm text-red-400 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">{reportError}</div>}
-          <div className="flex gap-3 mt-6">
-            <button onClick={saveReport} className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg font-bold text-white hover:scale-[1.02] transition-transform">
-              {editingReport ? 'Update' : 'Add'} Report
-            </button>
-            <button onClick={() => setIsReportModalOpen(false)} className="flex-1 py-3 bg-transparent border border-white/10 rounded-lg font-bold text-white/80 hover:bg-white/5 transition">
-              Cancel
-            </button>
+          <p className="text-sm text-gray-300">{editingReport?.description}</p>
+          <div className="text-xs text-gray-400">Severity: {editingReport?.severity}</div>
+          {editingReport?.images && editingReport.images.length > 0 && (
+            <div className="grid grid-cols-2 gap-2 mt-3">
+              {editingReport.images.map(img => (
+                <img key={img.id} src={`http://localhost:8000${img.image_url}`} alt="evidence" className="w-full h-40 object-cover rounded-lg" />
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <button onClick={() => { setIsReportModalOpen(false); openAssignTaskModal(undefined, editingReport || undefined); }} className="flex-1 py-2 bg-blue-600 rounded text-white">Assign Task</button>
+            <button onClick={() => { setIsReportModalOpen(false); setEditingReport(null); }} className="flex-1 py-2 border border-white/10 rounded text-white/70">Close</button>
           </div>
         </div>
       </Modal>
+
+      {/* Assign Task Modal */}
+      <Modal open={isTaskModalOpen} onClose={() => { setIsTaskModalOpen(false); setSelectedVolunteer(null); setEditingReport(null); }} title={selectedVolunteer ? `Assign Task to ${selectedVolunteer.name}` : 'Assign Task'}>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-1">Volunteer</label>
+            <select value={selectedVolunteer?.id || ''} onChange={(e) => {
+              const v = volunteers.find(x => x.id === e.target.value) || null;
+              setSelectedVolunteer(v);
+            }} className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none">
+              <option value="">-- select volunteer --</option>
+              {volunteers.map(v => (
+                <option key={v.id} value={v.id}>{v.name} • {v.phone}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-1">Task Title</label>
+            <input 
+              type="text" 
+              value={taskTitle}
+              onChange={(e) => setTaskTitle(e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none"
+              placeholder="e.g., Distribute Food"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-1">Description</label>
+            <textarea 
+              value={taskDescription}
+              onChange={(e) => setTaskDescription(e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none h-24"
+              placeholder="Detailed instructions..."
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-1">Priority</label>
+            <select 
+              value={taskPriority}
+              onChange={(e) => setTaskPriority(e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none"
+            >
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+          <button 
+            onClick={handleAssignTask}
+            className="w-full py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-bold text-white transition-colors mt-4"
+          >
+            Assign Task
+          </button>
+        </div>
+      </Modal>
+
     </div>
   );
 }

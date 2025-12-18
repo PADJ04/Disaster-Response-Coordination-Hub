@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Globe, Menu, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import type { TabType } from '../types';
 
 interface NavbarProps {
@@ -9,6 +10,7 @@ interface NavbarProps {
 }
 
 export default function Navbar({ setActiveTab, loggedInRole, onLogout }: NavbarProps) {
+  const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -55,6 +57,14 @@ export default function Navbar({ setActiveTab, loggedInRole, onLogout }: NavbarP
               {item}
             </button>
           ))}
+          {loggedInRole === 'district' && (
+            <button 
+              onClick={() => navigate('/volunteer-dashboard')}
+              className="text-sm font-medium text-white/70 hover:text-blue-400 transition-colors uppercase tracking-widest"
+            >
+              Volunteer View
+            </button>
+          )}
           {loggedInRole ? (
             <button onClick={onLogout} className="w-10 h-10 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full backdrop-blur-sm transition-all flex items-center justify-center text-sm font-medium">
               {loggedInRole === 'volunteer' ? 'V' : 'D'}

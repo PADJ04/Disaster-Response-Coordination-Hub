@@ -28,3 +28,26 @@ export interface InputGroupProps {
   placeholder: string;
   theme?: 'teal' | 'red';
 }
+
+export interface Task {
+  id: string;
+  title: string;
+  description: string;
+  status: 'assigned' | 'accepted' | 'rejected' | 'completed';
+  priority: 'low' | 'medium' | 'high';
+  volunteer_id: string;
+  report_id?: string;
+  created_at: string;
+}
+
+export interface Report {
+  id: string;
+  title: string;
+  description: string;
+  severity: string;
+  latitude: number;
+  longitude: number;
+  status: string;
+  created_at: string;
+  images: { id: string; image_url: string }[];
+}

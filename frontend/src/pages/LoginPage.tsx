@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { LogIn, UserPlus } from 'lucide-react';
+import { LogIn, UserPlus, ArrowLeft } from 'lucide-react';
 import type { LoginProps } from '../types';
+import api from '../api';
 
 export default function LoginPage({ onNavigate, onLogin }: LoginProps) {
   const [role, setRole] = useState<'district' | 'volunteer' | null>(null);
   const [step, setStep] = useState<'select' | 'credentials'>('select');
-  const [userId, setUserId] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -18,21 +19,35 @@ export default function LoginPage({ onNavigate, onLogin }: LoginProps) {
 
   const handleSignIn = async () => {
     setError(null);
-    if (!userId.trim() || !password) {
-      setError('Please enter user id and password.');
+    if (!identifier.trim() || !password) {
+      setError('Please enter phone/email and password.');
       return;
     }
 
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 600));
-    setLoading(false);
+    try {
+      const response = await api.post('/auth/login', {
+        identifier,
+        password,
+        role
+      });
 
-    onLogin(role as 'volunteer' | 'district');
+      localStorage.setItem('token', response.data.access_token);
+      localStorage.setItem('user_id', response.data.user_id);
+      localStorage.setItem('role', role as string);
+      localStorage.setItem('name', response.data.name || '');
+
+      onLogin(role as 'volunteer' | 'district');
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Login failed. Please check your credentials.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSignUp = () => {
     if (role === 'volunteer') {
-      onNavigate('volunteer');
+      onNavigate('volunteer-signup');
     } else {
       onNavigate('district-signup');
     }
@@ -49,113 +64,109 @@ export default function LoginPage({ onNavigate, onLogin }: LoginProps) {
   const icon = role === 'district' ? <LogIn className="w-10 h-10 text-blue-400" /> : <UserPlus className="w-10 h-10 text-teal-400" />;
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center px-6 md:px-12 animate-fade-in">
-      <div className={`max-w-md w-full bg-black/40 backdrop-blur-xl border ${borderColor} rounded-3xl p-8 md:p-12 ${shadowColor}`}>
-        {step === 'select' && (
-          <>
-            <div className="text-center mb-8">
-              <h2 className="text-3xl md:text-4xl font-bold text-white mb-2">Access Portal</h2>
-              <p className="text-white/60">Select your role to continue</p>
+    <div className="max-w-md mx-auto w-full px-6 animate-slide-up">
+      {step === 'select' ? (
+        <div className="space-y-6">
+          <h2 className="text-3xl font-bold text-center mb-8">Select Your Role</h2>
+          
+          <button 
+            onClick={() => handleRoleSelect('volunteer')}
+            className="w-full p-6 bg-black/40 backdrop-blur-xl border border-teal-500/30 rounded-2xl hover:bg-teal-500/10 transition-all group text-left relative overflow-hidden"
+          >
+            <div className="absolute inset-0 bg-gradient-to-r from-teal-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="flex items-center gap-4 relative z-10">
+              <div className="p-3 bg-teal-500/20 rounded-xl">
+                <UserPlus className="w-8 h-8 text-teal-400" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-white">Volunteer</h3>
+                <p className="text-teal-200/60 text-sm">Join the response team</p>
+              </div>
+            </div>
+          </button>
+
+          <button 
+            onClick={() => handleRoleSelect('district')}
+            className="w-full p-6 bg-black/40 backdrop-blur-xl border border-blue-500/30 rounded-2xl hover:bg-blue-500/10 transition-all group text-left relative overflow-hidden"
+          >
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="flex items-center gap-4 relative z-10">
+              <div className="p-3 bg-blue-500/20 rounded-xl">
+                <LogIn className="w-8 h-8 text-blue-400" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-white">District Authority</h3>
+                <p className="text-blue-200/60 text-sm">Official command center</p>
+              </div>
+            </div>
+          </button>
+        </div>
+      ) : (
+        <div className={`bg-black/40 backdrop-blur-xl border ${borderColor} rounded-3xl p-8 ${shadowColor}`}>
+          <button 
+            onClick={() => setStep('select')}
+            className="mb-6 text-white/50 hover:text-white flex items-center gap-2 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" /> Back
+          </button>
+
+          <div className="flex items-center gap-4 mb-8">
+            <div className={`p-4 ${iconBg} rounded-2xl`}>
+              {icon}
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-white">
+                {role === 'district' ? 'Authority Login' : 'Volunteer Login'}
+              </h2>
+              <p className={`${accentColor} opacity-60`}>Enter your credentials</p>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-white/60 uppercase tracking-wider">Phone or Email</label>
+              <input 
+                type="text" 
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white focus:outline-none focus:border-white/30 transition-colors"
+                placeholder="Enter phone or email"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-white/60 uppercase tracking-wider">Password</label>
+              <input 
+                type="password" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white focus:outline-none focus:border-white/30 transition-colors"
+                placeholder="••••••••"
+              />
             </div>
 
-            <div className="grid grid-cols-1 gap-4">
-              <button
-                onClick={() => handleRoleSelect('district')}
-                className="w-full text-left p-6 rounded-2xl border border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10 transition-all group">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="p-2 bg-blue-500/20 rounded-lg group-hover:bg-blue-500/30 transition">
-                    <LogIn className="w-5 h-5 text-blue-400" />
-                  </div>
-                  <div className="font-bold text-white">District Authority</div>
-                </div>
-                <div className="text-sm text-blue-200/60 ml-11">Access reporting and district management tools</div>
-              </button>
+            {error && (
+              <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 text-sm">
+                {error}
+              </div>
+            )}
 
-              <button
-                onClick={() => handleRoleSelect('volunteer')}
-                className="w-full text-left p-6 rounded-2xl border border-teal-500/30 bg-teal-500/5 hover:bg-teal-500/10 transition-all group">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="p-2 bg-teal-500/20 rounded-lg group-hover:bg-teal-500/30 transition">
-                    <UserPlus className="w-5 h-5 text-teal-400" />
-                  </div>
-                  <div className="font-bold text-white">Volunteer</div>
-                </div>
-                <div className="text-sm text-teal-200/60 ml-11">View tasks, report observations, and join missions</div>
-              </button>
-            </div>
-
-            <button
-              onClick={() => onNavigate('home')}
-              className="w-full mt-6 px-4 py-3 bg-transparent border border-white/10 rounded-xl text-sm font-medium text-white/80 hover:bg-white/5 transition">
-              Back to Home
+            <button 
+              onClick={handleSignIn}
+              disabled={loading}
+              className={`w-full py-4 bg-gradient-to-r ${gradientFrom} ${gradientTo} rounded-xl font-bold text-white hover:scale-[1.02] transition-transform shadow-lg disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              {loading ? 'Signing in...' : 'Sign In'}
             </button>
-          </>
-        )}
 
-        {step === 'credentials' && (
-          <>
-            <div className="flex items-center gap-4 mb-8">
-              <div className={`p-4 ${iconBg} rounded-2xl`}>
-                {icon}
-              </div>
-              <div>
-                <h2 className="text-3xl md:text-4xl font-bold text-white">{role === 'district' ? 'District' : 'Volunteer'} Access</h2>
-                <p className={role === 'district' ? 'text-blue-200/60' : 'text-teal-200/60'}>Sign in to your account</p>
-              </div>
-            </div>
-
-            <div className="space-y-6 mb-6">
-              <div>
-                <label className="text-xs font-bold text-white/60 uppercase tracking-wider mb-2 block">User ID</label>
-                <input
-                  value={userId}
-                  onChange={(e) => setUserId(e.target.value)}
-                  placeholder="Enter your user ID"
-                  className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none transition"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-white/60 uppercase tracking-wider mb-2 block">Password</label>
-                <input
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
-                  type="password"
-                  className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none transition"
-                />
-              </div>
-            </div>
-
-            {error && <div className="text-sm text-red-400 mb-6 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">{error}</div>}
-
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <button
-                onClick={handleSignIn}
-                disabled={loading}
-                className={`py-3 bg-gradient-to-r ${gradientFrom} ${gradientTo} rounded-xl font-bold text-white hover:scale-[1.02] transition-transform disabled:opacity-50 shadow-lg ${role === 'district' ? 'shadow-blue-500/20' : 'shadow-teal-500/20'}`}>
-                {loading ? 'Signing in...' : 'Sign In'}
-              </button>
-
-              <button
-                onClick={handleSignUp}
-                className={`py-3 bg-gradient-to-r ${gradientFrom} ${gradientTo} rounded-xl font-bold text-white hover:scale-[1.02] transition-transform shadow-lg ${role === 'district' ? 'shadow-blue-500/20' : 'shadow-teal-500/20'}`}>
-                Sign Up
+            <div className="text-center">
+              <button onClick={handleSignUp} className="text-white/40 hover:text-white text-sm transition-colors">
+                New here? Create an account
               </button>
             </div>
-
-            <button
-              onClick={() => {
-                setStep('select');
-                setRole(null);
-                setUserId('');
-                setPassword('');
-              }}
-              className="w-full px-4 py-3 bg-transparent border border-white/10 rounded-xl text-sm font-medium text-white/80 hover:bg-white/5 transition">
-              Back to Roles
-            </button>
-          </>
-        )}
-      </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

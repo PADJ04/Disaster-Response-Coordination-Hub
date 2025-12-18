@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import ActionDock from './components/ActionDock';
 import HomePage from './pages/HomePage';
@@ -12,66 +13,75 @@ import DistrictDashboard from './pages/DistrictDashboard';
 import type { TabType } from './types';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<TabType>('home');
-  const [loggedInRole, setLoggedInRole] = useState<'volunteer' | 'district' | null>(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [loggedInRole, setLoggedInRole] = useState<'volunteer' | 'district' | null>(() => {
+    const stored = localStorage.getItem('role');
+    return stored === 'volunteer' || stored === 'district' ? (stored as 'volunteer' | 'district') : null;
+  });
 
-  // Navigation Logic
-  const renderContent = () => {
-    if (!loggedInRole) {
-      switch (activeTab) {
-        case 'login':
-          // Pass a callback to LoginPage to set login state
-          return <LoginPage onNavigate={setActiveTab} onLogin={(role) => {
-            setLoggedInRole(role);
-          }} />;
-        case 'volunteer-signup':
-          return <VolunteerSignupPage onBack={() => setActiveTab('home')} />;
-        case 'district-signup':
-          return <DistrictSignupPage onBack={() => setActiveTab('login')} />;
-        case 'report':
-          return <ReportPage onBack={() => setActiveTab('home')} />;
-        case 'live-data':
-          return <LiveDataPage onBack={() => setActiveTab('home')} />;
-        default:
-          return <HomePage onNavigate={setActiveTab} />;
-      }
-    } else {
-      // After login, show only dashboard for the role
-      if (loggedInRole === 'volunteer') {
-        return <VolunteerDashboard onLogout={() => {
-          setLoggedInRole(null);
-          setActiveTab('home');
-        }} />;
-      } else {
-        return <DistrictDashboard onLogout={() => {
-          setLoggedInRole(null);
-          setActiveTab('home');
-        }} />;
-      }
+  const handleNavigate = (tab: TabType) => {
+    switch (tab) {
+      case 'home': navigate('/'); break;
+      case 'login': navigate('/login'); break;
+      case 'volunteer-signup': navigate('/volunteer-signup'); break;
+      case 'district-signup': navigate('/district-signup'); break;
+      case 'report': navigate('/report'); break;
+      case 'live-data': navigate('/live-data'); break;
     }
   };
 
   return (
     <div className="min-h-screen bg-black text-white font-sans selection:bg-blue-500 selection:text-white overflow-x-hidden">
-      {/* Simple Gradient Background (removed Unsplash/map image) */}
+      {/* Simple Gradient Background */}
       <div className="fixed inset-0 z-0">
         <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-black"></div>
       </div>
 
       {/* Navigation Bar */}
-      <Navbar setActiveTab={setActiveTab} loggedInRole={loggedInRole} onLogout={() => {
-        setLoggedInRole(null);
-        setActiveTab('home');
-      }} />
+      <Navbar 
+        setActiveTab={handleNavigate} 
+        loggedInRole={loggedInRole} 
+        onLogout={() => {
+          setLoggedInRole(null);
+          navigate('/');
+        }} 
+      />
 
       {/* Main Content Area */}
-      <main className={`relative z-10 flex flex-col ${activeTab === 'live-data' ? 'h-screen p-0' : 'pt-20 pb-32 min-h-screen'}` }>
-        {renderContent()}
+      <main className={`relative z-10 flex flex-col ${location.pathname === '/live-data' ? 'h-screen p-0' : 'pt-20 pb-32 min-h-screen'}` }>
+        <Routes>
+          <Route path="/" element={<HomePage onNavigate={handleNavigate} />} />
+          <Route path="/login" element={
+            <LoginPage 
+              onNavigate={handleNavigate} 
+              onLogin={(role) => {
+                setLoggedInRole(role);
+                localStorage.setItem('role', role);
+                navigate(role === 'volunteer' ? '/volunteer-dashboard' : '/district-dashboard');
+              }} 
+            />
+          } />
+          <Route path="/volunteer-signup" element={<VolunteerSignupPage onBack={() => navigate('/')} />} />
+          <Route path="/district-signup" element={<DistrictSignupPage onBack={() => navigate('/login')} />} />
+          <Route path="/report" element={<ReportPage onBack={() => navigate('/')} />} />
+          <Route path="/live-data" element={<LiveDataPage onBack={() => navigate('/')} />} />
+          <Route path="/volunteer-dashboard" element={
+            (loggedInRole === 'volunteer' || loggedInRole === 'district') ? 
+            <VolunteerDashboard onLogout={() => { setLoggedInRole(null); localStorage.removeItem('role'); localStorage.removeItem('token'); localStorage.removeItem('user_id'); navigate('/'); }} /> : 
+            <Navigate to="/login" />
+          } />
+          <Route path="/district-dashboard" element={
+            loggedInRole === 'district' ? 
+            <DistrictDashboard onLogout={() => { setLoggedInRole(null); localStorage.removeItem('role'); localStorage.removeItem('token'); localStorage.removeItem('user_id'); navigate('/'); }} /> : 
+            <Navigate to="/login" />
+          } />
+        </Routes>
       </main>
 
-      {/* Fixed Bottom Action Dock: only show before login and not on live-data */}
-      {!loggedInRole && activeTab !== 'live-data' && (
-        <ActionDock activeTab={activeTab} setActiveTab={setActiveTab} />
+      {/* Fixed Bottom Action Dock */}
+      {location.pathname === '/' && (
+        <ActionDock activeTab={location.pathname === '/' ? 'home' : location.pathname.substring(1) as TabType} setActiveTab={handleNavigate} />
       )}
     </div>
   );

@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "@types/react-leaflet": "^2.8.3",
+    "axios": "^1.13.2",
+    "react-leaflet": "^5.0.0",
+    "react-router-dom": "^7.11.0"
+  }
+}

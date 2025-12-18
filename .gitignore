@@ -12,3 +12,6 @@ Desktop.ini
 
 # ---- OSM PBF files ----
 *.osm.pbf
+.venv/
+.env
+backend/.env
