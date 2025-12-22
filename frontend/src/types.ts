@@ -33,7 +33,7 @@ export interface Task {
   id: string;
   title: string;
   description: string;
-  status: 'assigned' | 'accepted' | 'rejected' | 'completed';
+  status: 'assigned' | 'accepted' | 'rejected' | 'completed' | 'pending_verification';
   priority: 'low' | 'medium' | 'high';
   volunteer_id: string;
   report_id?: string;

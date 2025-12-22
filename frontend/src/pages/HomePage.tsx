@@ -1,8 +1,29 @@
+import { useState, useEffect } from 'react';
 import { AlertCircle, Users, Building2, MapPin } from 'lucide-react';
 import HudCard from '../components/HudCard';
 import type { NavigationProps } from '../types';
+import api from '../api';
 
 export default function HomePage({ onNavigate }: NavigationProps) {
+  const [stats, setStats] = useState({
+    reports: 0,
+    volunteers: 0,
+    districts: 0,
+    rescue_centers: 0
+  });
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const res = await api.get('/stats/stats');
+        setStats(res.data);
+      } catch (err) {
+        console.error("Failed to fetch stats", err);
+      }
+    };
+    fetchStats();
+  }, []);
+
   return (
     <div className="flex-1 flex flex-col justify-center px-6 md:px-12 animate-fade-in">
       
@@ -39,29 +60,29 @@ export default function HomePage({ onNavigate }: NavigationProps) {
         <HudCard 
           icon={<AlertCircle className="text-red-400" />}
           label="Issues Reported"
-          value="247"
-          trend="+12"
+          value={stats.reports.toString()}
+          trend="Live"
           trendUp={false}
         />
         <HudCard 
           icon={<Users className="text-teal-400" />}
           label="Active Volunteers"
-          value="1,842"
-          trend="+89"
+          value={stats.volunteers.toString()}
+          trend="Ready"
           trendUp={true}
         />
         <HudCard 
           icon={<Building2 className="text-blue-400" />}
           label="Rescue Centers"
-          value="34"
-          trend="+2"
+          value={stats.rescue_centers.toString()}
+          trend="Active"
           trendUp={true}
         />
         <HudCard 
           icon={<MapPin className="text-purple-400" />}
           label="Districts"
-          value="12"
-          trend="Active"
+          value={stats.districts.toString()}
+          trend="Online"
           trendUp={true}
         />
       </div>

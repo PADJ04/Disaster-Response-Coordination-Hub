@@ -17,3 +17,13 @@ def create_rescue_center(center: schemas.RescueCenterCreate, db: Session = Depen
 @router.get("/rescue-centers/", response_model=List[schemas.RescueCenterResponse])
 def get_rescue_centers(db: Session = Depends(get_db)):
     return db.query(models.RescueCenter).all()
+
+@router.delete("/rescue-centers/{center_id}")
+def delete_rescue_center(center_id: str, db: Session = Depends(get_db)):
+    center = db.query(models.RescueCenter).filter(models.RescueCenter.id == center_id).first()
+    if not center:
+        raise HTTPException(status_code=404, detail="Rescue center not found")
+    
+    db.delete(center)
+    db.commit()
+    return {"message": "Rescue center deleted successfully"}

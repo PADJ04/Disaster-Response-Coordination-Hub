@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Trash2, Plus, LogOut } from 'lucide-react';
+import { Trash2, Plus, LogOut, CheckCircle, XCircle } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import Modal from '../components/Modal';
-import api, { createTask } from '../api';
+import api, { createTask, getTasks, updateTaskStatus } from '../api';
+import type { Task } from '../types';
 import L from 'leaflet';
 
 // Fix for default marker icon
@@ -64,6 +65,7 @@ export default function DistrictDashboard({ onLogout }: { onLogout: () => void }
   const [rescueCenters, setRescueCenters] = useState<RescueCenter[]>([]);
   const [reports, setReports] = useState<IncidentReport[]>([]);
   const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   // const [loading, setLoading] = useState(true);
 
   const [isRescueModalOpen, setIsRescueModalOpen] = useState(false);
@@ -75,9 +77,11 @@ export default function DistrictDashboard({ onLogout }: { onLogout: () => void }
   // Task Assignment
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [selectedVolunteer, setSelectedVolunteer] = useState<Volunteer | null>(null);
+  const [viewingVolunteer, setViewingVolunteer] = useState<Volunteer | null>(null);
   const [taskTitle, setTaskTitle] = useState('');
   const [taskDescription, setTaskDescription] = useState('');
   const [taskPriority, setTaskPriority] = useState('medium');
+  const [reportFilter, setReportFilter] = useState<'all' | 'assigned' | 'unassigned' | 'completed'>('all');
 
   // Rescue Center form
   const [rescueName, setRescueName] = useState('');
@@ -91,14 +95,16 @@ export default function DistrictDashboard({ onLogout }: { onLogout: () => void }
       try {
         const token = localStorage.getItem('token');
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const [volRes, repRes, resRes] = await Promise.all([
+        const [volRes, repRes, resRes, tasksData] = await Promise.all([
           api.get('/auth/volunteers', { headers }),
           api.get('/reports/', { headers }),
-          api.get('/resources/rescue-centers/', { headers })
+          api.get('/resources/rescue-centers/', { headers }),
+          getTasks(token!)
         ]);
         setVolunteers(volRes.data || []);
         setReports(repRes.data || []);
         setRescueCenters(resRes.data || []);
+        setTasks(tasksData || []);
       } catch (err) {
         console.error("Failed to fetch dashboard data", err);
       } finally {
@@ -132,6 +138,19 @@ export default function DistrictDashboard({ onLogout }: { onLogout: () => void }
     } catch (err) {
       console.error(err);
       alert("Failed to add rescue center");
+    }
+  };
+
+  const handleDeleteRescueCenter = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this rescue center?")) return;
+    try {
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      await api.delete(`/resources/rescue-centers/${id}`, { headers });
+      setRescueCenters(rescueCenters.filter(r => r.id !== id));
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete rescue center");
     }
   };
 
@@ -192,6 +211,28 @@ export default function DistrictDashboard({ onLogout }: { onLogout: () => void }
   };
   
 
+  const handleVerifyTask = async (taskId: string, approved: boolean) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      const status = approved ? 'completed' : 'assigned';
+      const updatedTask = await updateTaskStatus(taskId, status, token);
+      setTasks(tasks.map(t => t.id === updatedTask.id ? updatedTask : t));
+    } catch (err) {
+      console.error(err);
+      alert("Failed to update task status");
+    }
+  };
+
+  const filteredReports = reports.filter(r => {
+    if (reportFilter === 'all') return true;
+    if (reportFilter === 'completed') return r.status === 'resolved';
+    const isAssigned = tasks.some(t => t.report_id === r.id);
+    if (reportFilter === 'assigned') return isAssigned;
+    if (reportFilter === 'unassigned') return !isAssigned && r.status !== 'resolved';
+    return true;
+  });
+
   return (
     <div className="min-h-screen bg-black text-white p-6">
       <div className="max-w-7xl mx-auto space-y-8">
@@ -228,6 +269,37 @@ export default function DistrictDashboard({ onLogout }: { onLogout: () => void }
           </div>
         </div>
 
+        {/* Pending Verification Tasks */}
+        {tasks.some(t => t.status === 'pending_verification') && (
+          <div className="bg-orange-900/20 rounded-2xl border border-orange-500/30 overflow-hidden">
+            <div className="p-6 border-b border-orange-500/30 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-orange-400">Tasks Pending Verification</h2>
+            </div>
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {tasks.filter(t => t.status === 'pending_verification').map(task => (
+                <div key={task.id} className="bg-black/40 p-4 rounded-xl border border-orange-500/20">
+                  <h3 className="font-bold text-white mb-1">{task.title}</h3>
+                  <p className="text-sm text-gray-400 mb-3">{task.description}</p>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => handleVerifyTask(task.id, true)}
+                      className="flex-1 py-2 bg-green-600/20 text-green-400 border border-green-600/30 rounded-lg hover:bg-green-600/30 transition flex items-center justify-center gap-2"
+                    >
+                      <CheckCircle className="w-4 h-4" /> Approve
+                    </button>
+                    <button 
+                      onClick={() => handleVerifyTask(task.id, false)}
+                      className="flex-1 py-2 bg-red-600/20 text-red-400 border border-red-600/30 rounded-lg hover:bg-red-600/30 transition flex items-center justify-center gap-2"
+                    >
+                      <XCircle className="w-4 h-4" /> Reject
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           
@@ -235,9 +307,19 @@ export default function DistrictDashboard({ onLogout }: { onLogout: () => void }
           <div className="bg-gray-900/50 rounded-2xl border border-white/10 overflow-hidden">
             <div className="p-6 border-b border-white/10 flex justify-between items-center">
               <h2 className="text-xl font-bold text-white">Incident Reports</h2>
+              <select 
+                value={reportFilter} 
+                onChange={(e) => setReportFilter(e.target.value as any)}
+                className="bg-black/40 border border-white/10 rounded-lg px-3 py-1 text-sm text-white focus:outline-none"
+              >
+                <option value="all">All</option>
+                <option value="assigned">Assigned</option>
+                <option value="unassigned">Unassigned</option>
+                <option value="completed">Completed</option>
+              </select>
             </div>
             <div className="p-6 space-y-4 max-h-[400px] overflow-y-auto">
-              {reports.map(report => (
+              {filteredReports.map(report => (
                 <div key={report.id} className="bg-black/40 p-4 rounded-xl border border-white/5 hover:border-white/20 transition-colors">
                   <div className="flex justify-between items-start mb-2">
                     <div>
@@ -275,7 +357,7 @@ export default function DistrictDashboard({ onLogout }: { onLogout: () => void }
                   )}
                 </div>
               ))}
-              {reports.length === 0 && <p className="text-gray-500 text-center py-4">No active reports</p>}
+              {filteredReports.length === 0 && <p className="text-gray-500 text-center py-4">No reports found</p>}
             </div>
           </div>
 
@@ -283,17 +365,16 @@ export default function DistrictDashboard({ onLogout }: { onLogout: () => void }
           <div className="bg-gray-900/50 rounded-2xl border border-white/10 overflow-hidden">
             <div className="p-6 border-b border-white/10 flex justify-between items-center">
               <h2 className="text-xl font-bold text-white">Volunteers</h2>
-              <button onClick={() => setIsVolunteerViewOpen(true)} className="text-blue-400 hover:text-blue-300 text-sm font-bold">View All</button>
             </div>
             <div className="p-6 space-y-4 max-h-[400px] overflow-y-auto">
-              {volunteers.slice(0, 5).map(vol => (
+              {volunteers.map(vol => (
                 <div key={vol.id} className="flex items-center justify-between bg-black/40 p-4 rounded-xl border border-white/5">
                   <div>
                     <h3 className="font-bold text-white">{vol.name}</h3>
                     <p className="text-gray-400 text-sm">{vol.phone}</p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-gray-500 text-xs">{vol.address || 'No address'}</p>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setViewingVolunteer(vol)} className="text-xs px-3 py-1 bg-blue-500/20 text-blue-300 rounded border border-blue-500/30 hover:bg-blue-500/30 transition">View</button>
                   </div>
                 </div>
               ))}
@@ -301,108 +382,129 @@ export default function DistrictDashboard({ onLogout }: { onLogout: () => void }
             </div>
           </div>
 
+          {/* Rescue Centers List */}
+          <div className="bg-gray-900/50 rounded-2xl border border-white/10 overflow-hidden col-span-1 lg:col-span-2">
+            <div className="p-6 border-b border-white/10 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-white">Rescue Centers</h2>
+            </div>
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {rescueCenters.map(center => (
+                <div key={center.id} className="bg-black/40 p-4 rounded-xl border border-white/5 hover:border-white/20 transition-colors relative group">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="font-bold text-white">{center.name}</h3>
+                    <button 
+                      onClick={() => handleDeleteRescueCenter(center.id)}
+                      className="text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <p className="text-gray-400 text-sm mb-1">{center.address}</p>
+                  <div className="flex justify-between items-center text-xs text-gray-500 mt-2">
+                    <span>Capacity: {center.capacity}</span>
+                    <span>{center.contact}</span>
+                  </div>
+                </div>
+              ))}
+              {rescueCenters.length === 0 && <p className="text-gray-500 text-center py-4 col-span-full">No rescue centers added</p>}
+            </div>
+          </div>
+
         </div>
       </div>
 
       {/* Rescue Center Modal */}
-      <Modal open={isRescueModalOpen} onClose={() => setIsRescueModalOpen(false)} title="Add Rescue Center">
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">Name</label>
-            <input 
-              type="text" 
-              value={rescueName}
-              onChange={(e) => setRescueName(e.target.value)}
-              className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none"
-              placeholder="Center Name"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">Address</label>
-            <input 
-              type="text" 
-              value={rescueAddress}
-              onChange={(e) => setRescueAddress(e.target.value)}
-              className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none"
-              placeholder="Address"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-1">Capacity</label>
-              <input 
-                type="number" 
-                value={rescueCapacity}
-                onChange={(e) => setRescueCapacity(e.target.value)}
-                className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none"
-                placeholder="Capacity"
+      <Modal open={isRescueModalOpen} onClose={() => setIsRescueModalOpen(false)} title="Add Rescue Center" className="resize overflow-auto max-w-none w-[90vw] h-[90vh]">
+        <div className="relative w-full h-full rounded-lg overflow-hidden border border-white/10">
+           <MapContainer center={[20.5937, 78.9629]} zoom={5} style={{ height: '100%', width: '100%' }}>
+              <TileLayer
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-1">Contact</label>
-              <input 
-                type="text" 
-                value={rescueContact}
-                onChange={(e) => setRescueContact(e.target.value)}
-                className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none"
-                placeholder="Phone/Email"
-              />
-            </div>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">Location (Click on map)</label>
-            <div className="h-64 w-full rounded-lg overflow-hidden border border-white/10">
-               <MapContainer center={[20.5937, 78.9629]} zoom={5} style={{ height: '100%', width: '100%' }}>
-                  <TileLayer
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              <LocationMarker position={rescueLocation} setPosition={setRescueLocation} />
+           </MapContainer>
+           
+           {/* Floating Form Overlay */}
+           <div className="absolute top-4 right-4 w-80 bg-black/80 backdrop-blur-md p-4 rounded-xl border border-white/20 shadow-2xl z-[1000]">
+              <h3 className="text-lg font-bold text-white mb-3">Center Details</h3>
+              <div className="space-y-3">
+                <input 
+                  type="text" 
+                  value={rescueName}
+                  onChange={(e) => setRescueName(e.target.value)}
+                  className="w-full bg-white/10 border border-white/10 rounded-lg p-2 text-white text-sm focus:border-blue-500 focus:outline-none"
+                  placeholder="Center Name"
+                />
+                <input 
+                  type="text" 
+                  value={rescueAddress}
+                  onChange={(e) => setRescueAddress(e.target.value)}
+                  className="w-full bg-white/10 border border-white/10 rounded-lg p-2 text-white text-sm focus:border-blue-500 focus:outline-none"
+                  placeholder="Address"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <input 
+                    type="number" 
+                    value={rescueCapacity}
+                    onChange={(e) => setRescueCapacity(e.target.value)}
+                    className="w-full bg-white/10 border border-white/10 rounded-lg p-2 text-white text-sm focus:border-blue-500 focus:outline-none"
+                    placeholder="Capacity"
                   />
-                  <LocationMarker position={rescueLocation} setPosition={setRescueLocation} />
-               </MapContainer>
-            </div>
-            {rescueLocation && <p className="text-xs text-green-400 mt-1">Location selected: {rescueLocation.lat.toFixed(4)}, {rescueLocation.lng.toFixed(4)}</p>}
-          </div>
-
-          <button 
-            onClick={handleAddRescueCenter}
-            className="w-full py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-bold text-white transition-colors mt-4"
-          >
-            Add Rescue Center
-          </button>
-        </div>
-      </Modal>
-
-      {/* Volunteers Modal */}
-      <Modal open={isVolunteerViewOpen} onClose={() => setIsVolunteerViewOpen(false)} title="All Volunteers">
-        <div className="space-y-4 max-h-[60vh] overflow-y-auto">
-          {volunteers.map(vol => (
-            <div key={vol.id} className="bg-white/5 p-4 rounded-xl border border-white/10">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs text-gray-500 uppercase">Name</label>
-                  <p className="font-bold">{vol.name}</p>
+                  <input 
+                    type="text" 
+                    value={rescueContact}
+                    onChange={(e) => setRescueContact(e.target.value)}
+                    className="w-full bg-white/10 border border-white/10 rounded-lg p-2 text-white text-sm focus:border-blue-500 focus:outline-none"
+                    placeholder="Contact"
+                  />
                 </div>
-                <div>
-                  <label className="text-xs text-gray-500 uppercase">Phone</label>
-                  <p>{vol.phone}</p>
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 uppercase">Email</label>
-                  <p>{vol.email}</p>
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 uppercase">Address</label>
-                  <p>{vol.address || 'N/A'}</p>
-                </div>
+                {rescueLocation ? (
+                   <p className="text-xs text-green-400">Location: {rescueLocation.lat.toFixed(4)}, {rescueLocation.lng.toFixed(4)}</p>
+                ) : (
+                   <p className="text-xs text-yellow-400">Click map to set location</p>
+                )}
+                <button 
+                  onClick={handleAddRescueCenter}
+                  className="w-full py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-bold text-white text-sm transition-colors"
+                >
+                  Add Center
+                </button>
               </div>
-              <button onClick={() => { setIsVolunteerViewOpen(false); openAssignTaskModal(vol); }} className="w-full mt-4 py-2 bg-blue-600/20 border border-blue-500/30 text-blue-300 rounded-lg hover:bg-blue-600/30 transition font-bold">
-                Assign Task
-              </button>
-            </div>
-          ))}
+           </div>
         </div>
       </Modal>
+
+      {/* Volunteer Details Modal */}
+      <Modal open={!!viewingVolunteer} onClose={() => setViewingVolunteer(null)} title="Volunteer Details">
+        {viewingVolunteer && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs text-gray-500 uppercase">Name</label>
+                <p className="font-bold text-white">{viewingVolunteer.name}</p>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 uppercase">Phone</label>
+                <p className="text-white">{viewingVolunteer.phone}</p>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 uppercase">Email</label>
+                <p className="text-white">{viewingVolunteer.email}</p>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 uppercase">Address</label>
+                <p className="text-white">{viewingVolunteer.address || 'N/A'}</p>
+              </div>
+            </div>
+            <button onClick={() => { setViewingVolunteer(null); openAssignTaskModal(viewingVolunteer); }} className="w-full mt-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-bold text-white transition-colors">
+              Assign Task
+            </button>
+          </div>
+        )}
+      </Modal>
+
+      {/* Volunteers Modal (Legacy - can be removed or kept if needed, but user asked to remove View All) */}
+      {/* <Modal open={isVolunteerViewOpen} ... /> */}
 
       {/* Report Details Modal */}
       <Modal open={isReportModalOpen} onClose={() => { setIsReportModalOpen(false); setEditingReport(null); }} title={editingReport?.title}>

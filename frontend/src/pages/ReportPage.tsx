@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ArrowRight, AlertTriangle, Camera, MapPin } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { ArrowRight, AlertTriangle, Camera, MapPin, X } from 'lucide-react';
 import type { BackProps } from '../types';
 import api from '../api';
 
@@ -14,16 +14,55 @@ export default function ReportPage({ onBack }: BackProps) {
   const [loading, setLoading] = useState(false);
   const [locationLoading, setLocationLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const newFiles = Array.from(e.target.files);
-      if (images.length + newFiles.length > 5) {
-        setError("Maximum 5 images allowed.");
-        return;
-      }
-      setImages([...images, ...newFiles]);
-      setError(null);
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      setIsCameraOpen(true);
+      // Wait for the video element to be rendered
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      }, 100);
+    } catch (err) {
+      console.error("Error accessing camera:", err);
+      alert("Could not access camera. Please ensure you have granted permission.");
+    }
+  };
+
+  const stopCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+    }
+    setIsCameraOpen(false);
+  };
+
+  const capturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d')?.drawImage(video, 0, 0);
+      
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const file = new File([blob], `capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
+          if (images.length >= 5) {
+             setError("Maximum 5 images allowed.");
+             stopCamera();
+             return;
+          }
+          setImages([...images, file]);
+          stopCamera();
+        }
+      }, 'image/jpeg');
     }
   };
 
@@ -159,24 +198,42 @@ export default function ReportPage({ onBack }: BackProps) {
 
           <div className="space-y-2">
             <label className="text-xs font-bold text-red-200/80 uppercase tracking-wider">Evidence (Max 5)</label>
-            <div className="flex flex-wrap gap-4">
-              <label className="flex flex-col items-center justify-center w-24 h-24 bg-white/5 border border-white/10 rounded-xl cursor-pointer hover:bg-white/10 transition-colors">
-                <Camera className="w-6 h-6 text-white/50 mb-2" />
-                <span className="text-xs text-white/50">Capture</span>
-                <input type="file" className="hidden" accept="image/*" capture="environment" onChange={handleImageChange} />
-              </label>
-              {images.map((img, index) => (
-                <div key={index} className="relative w-24 h-24 bg-white/5 rounded-xl overflow-hidden border border-white/10">
-                  <img src={URL.createObjectURL(img)} alt="Preview" className="w-full h-full object-cover" />
-                  <button 
-                    onClick={() => removeImage(index)}
-                    className="absolute top-1 right-1 bg-black/50 p-1 rounded-full hover:bg-red-500/50 transition-colors"
-                  >
-                    <ArrowRight className="w-3 h-3 text-white rotate-45" />
+            
+            {isCameraOpen ? (
+              <div className="relative w-full h-64 bg-black rounded-xl overflow-hidden border border-white/10">
+                <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
+                <canvas ref={canvasRef} className="hidden" />
+                <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4">
+                  <button onClick={capturePhoto} className="p-3 bg-white rounded-full shadow-lg hover:scale-110 transition-transform">
+                    <div className="w-4 h-4 bg-red-500 rounded-full"></div>
+                  </button>
+                  <button onClick={stopCamera} className="p-3 bg-black/50 text-white rounded-full backdrop-blur-md border border-white/20">
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
-              ))}
-            </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-4">
+                <button 
+                  onClick={startCamera}
+                  className="flex flex-col items-center justify-center w-24 h-24 bg-white/5 border border-white/10 rounded-xl cursor-pointer hover:bg-white/10 transition-colors"
+                >
+                  <Camera className="w-6 h-6 text-white/50 mb-2" />
+                  <span className="text-xs text-white/50">Capture</span>
+                </button>
+                {images.map((img, index) => (
+                  <div key={index} className="relative w-24 h-24 bg-white/5 rounded-xl overflow-hidden border border-white/10">
+                    <img src={URL.createObjectURL(img)} alt="Preview" className="w-full h-full object-cover" />
+                    <button 
+                      onClick={() => removeImage(index)}
+                      className="absolute top-1 right-1 bg-black/50 p-1 rounded-full hover:bg-red-500/50 transition-colors"
+                    >
+                      <X className="w-3 h-3 text-white" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {error && (

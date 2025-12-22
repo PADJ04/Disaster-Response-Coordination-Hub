@@ -76,8 +76,8 @@ def update_task_status(task_id: str, task_update: schemas.TaskUpdate, db: Sessio
     if current_user.role == "volunteer":
         if task.volunteer_id != current_user.id:
             raise HTTPException(status_code=403, detail="Not authorized to update this task")
-        # Volunteers can only change status to accepted, rejected, completed
-        if task_update.status not in ["accepted", "rejected", "completed"]:
+        # Volunteers can only change status to accepted, rejected, pending_verification
+        if task_update.status not in ["accepted", "rejected", "pending_verification"]:
              raise HTTPException(status_code=400, detail="Invalid status update for volunteer")
     
     task.status = task_update.status

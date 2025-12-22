@@ -1,49 +1,50 @@
 import { useState, useEffect } from 'react';
 import { Edit2, MapPin } from 'lucide-react';
 import Modal from '../components/Modal';
-import { getTasks, updateTaskStatus as apiUpdateTaskStatus } from '../api';
-import type { Task } from '../types';
-
-type Mission = {
-  id: string;
-  title: string;
-  location: string;
-  distance: string;
-  description: string;
-  volunteers_needed: number;
-};
+import api, { getTasks, updateTaskStatus as apiUpdateTaskStatus } from '../api';
+import type { Task, Report } from '../types';
 
 export default function VolunteerDashboard({ onLogout }: { onLogout: () => void }) {
   const [tasks, setTasks] = useState<Task[]>([]);
+  // const [availableMissions, setAvailableMissions] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [, setError] = useState<string | null>(null);
 
-  const [missions] = useState<Mission[]>([
-    { id: 'm-1', title: 'Emergency Medical Aid', location: 'North Sector', distance: '2.5 km', description: 'Provide medical assistance to affected residents', volunteers_needed: 5 },
-    { id: 'm-2', title: 'Food Distribution', location: 'East Zone', distance: '4.2 km', description: 'Distribute food and water supplies', volunteers_needed: 8 },
-    { id: 'm-3', title: 'Shelter Setup', location: 'Central Area', distance: '1.8 km', description: 'Help set up temporary shelters', volunteers_needed: 10 },
-  ]);
-
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [taskStatus, setTaskStatus] = useState<'assigned' | 'accepted' | 'rejected' | 'completed'>('assigned');
+  const [taskStatus, setTaskStatus] = useState<'assigned' | 'accepted' | 'rejected' | 'completed' | 'pending_verification'>('assigned');
+
+  const [filterMonth, setFilterMonth] = useState<string>('');
+  const [filterYear, setFilterYear] = useState<string>('');
 
   useEffect(() => {
-    const fetchTasks = async () => {
+    const fetchData = async () => {
       try {
         const token = localStorage.getItem('token');
         if (!token) return;
-        const data = await getTasks(token);
-        setTasks(data);
+        
+        const tasksData = await getTasks(token);
+        setTasks(tasksData);
       } catch (err) {
-        console.error("Failed to fetch tasks", err);
-        setError("Failed to load tasks");
+        console.error("Failed to fetch data", err);
+        setError("Failed to load dashboard data");
       } finally {
         setLoading(false);
       }
     };
-    fetchTasks();
+    fetchData();
   }, []);
+
+  const filteredAssignedTasks = tasks.filter(t => {
+    if (t.status !== 'assigned') return false;
+    if (!filterMonth && !filterYear) return true;
+    const date = new Date(t.created_at);
+    if (filterMonth && (date.getMonth() + 1).toString() !== filterMonth) return false;
+    if (filterYear && date.getFullYear().toString() !== filterYear) return false;
+    return true;
+  });
+
+  const activeTasks = tasks.filter(t => t.status === 'accepted');
 
   const openTaskModal = (task: Task) => {
     setEditingTask(task);
@@ -72,6 +73,7 @@ export default function VolunteerDashboard({ onLogout }: { onLogout: () => void 
       case 'accepted': return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30';
       case 'rejected': return 'bg-red-500/20 text-red-300 border-red-500/30';
       case 'completed': return 'bg-green-500/20 text-green-300 border-green-500/30';
+      case 'pending_verification': return 'bg-orange-500/20 text-orange-300 border-orange-500/30';
       default: return 'bg-white/10 text-white/70';
     }
   };
@@ -102,22 +104,35 @@ export default function VolunteerDashboard({ onLogout }: { onLogout: () => void 
           </div>
 
           <div className="p-6 bg-purple-500/10 border border-purple-500/30 rounded-2xl">
-            <h3 className="text-sm font-bold text-purple-300 uppercase tracking-wider mb-2">Nearby Missions</h3>
-            <p className="text-3xl font-bold text-white">{missions.length}</p>
-            <p className="text-xs text-purple-200/60 mt-4">Active missions in your area</p>
+            <h3 className="text-sm font-bold text-purple-300 uppercase tracking-wider mb-2">Active Incidents</h3>
+            <p className="text-3xl font-bold text-white">{activeTasks.length}</p>
+            <p className="text-xs text-purple-200/60 mt-4">Incidents you are working on</p>
           </div>
         </div>
 
         {/* Assigned Tasks Section */}
         <div className="mb-8">
-          <h2 className="text-2xl font-bold text-white mb-4">Assigned Tasks</h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-bold text-white">Assigned Tasks</h2>
+            <div className="flex gap-2">
+              <select value={filterMonth} onChange={(e) => setFilterMonth(e.target.value)} className="bg-black/40 border border-white/10 rounded-lg px-3 py-1 text-sm text-white focus:outline-none">
+                <option value="">Month</option>
+                {Array.from({length: 12}, (_, i) => i + 1).map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+              <select value={filterYear} onChange={(e) => setFilterYear(e.target.value)} className="bg-black/40 border border-white/10 rounded-lg px-3 py-1 text-sm text-white focus:outline-none">
+                <option value="">Year</option>
+                <option value="2024">2024</option>
+                <option value="2025">2025</option>
+              </select>
+            </div>
+          </div>
           <div className="space-y-3">
             {loading ? (
                <div className="p-6 text-center text-white/60 bg-white/5 border border-white/10 rounded-lg">Loading tasks...</div>
-            ) : tasks.length === 0 ? (
-              <div className="p-6 text-center text-white/60 bg-white/5 border border-white/10 rounded-lg">No assigned tasks yet</div>
+            ) : filteredAssignedTasks.length === 0 ? (
+              <div className="p-6 text-center text-white/60 bg-white/5 border border-white/10 rounded-lg">No assigned tasks found</div>
             ) : (
-              tasks.map((task) => (
+              filteredAssignedTasks.map((task) => (
                 <div key={task.id} className="p-4 bg-black/40 border border-teal-500/20 rounded-lg hover:border-teal-500/40 transition">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -143,31 +158,32 @@ export default function VolunteerDashboard({ onLogout }: { onLogout: () => void 
           </div>
         </div>
 
-        {/* Nearby Missions Section */}
+        {/* Active Incidents Section (Accepted Tasks) */}
         <div>
-          <h2 className="text-2xl font-bold text-white mb-4">Nearby Missions</h2>
+          <h2 className="text-2xl font-bold text-white mb-4">Active Incidents (My Missions)</h2>
           <div className="space-y-3">
-            {missions.length === 0 ? (
-              <div className="p-6 text-center text-white/60 bg-white/5 border border-white/10 rounded-lg">No nearby missions available</div>
+            {activeTasks.length === 0 ? (
+              <div className="p-6 text-center text-white/60 bg-white/5 border border-white/10 rounded-lg">No active incidents</div>
             ) : (
-              missions.map((mission) => (
-                <div key={mission.id} className="p-4 bg-black/40 border border-purple-500/20 rounded-lg hover:border-purple-500/40 transition">
+              activeTasks.map((task) => (
+                <div key={task.id} className="p-4 bg-black/40 border border-purple-500/20 rounded-lg hover:border-purple-500/40 transition">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <h3 className="font-bold text-white text-lg mb-2">{mission.title}</h3>
-                      <div className="flex items-center gap-2 text-sm text-white/70 mb-2">
-                        <MapPin className="w-4 h-4 text-purple-400" />
-                        <span>{mission.location} • {mission.distance}</span>
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="font-bold text-white text-lg">{task.title}</h3>
+                        <span className={`text-xs px-3 py-1 rounded-full border font-medium ${getStatusColor(task.status)}`}>
+                          {task.status}
+                        </span>
                       </div>
-                      <p className="text-sm text-white/70 mb-3">{mission.description}</p>
+                      <p className="text-sm text-white/70 mb-3">{task.description}</p>
                       <div className="flex items-center gap-2">
                         <span className="text-xs px-3 py-1 bg-purple-500/20 text-purple-300 rounded-full border border-purple-500/30">
-                          {mission.volunteers_needed} volunteers needed
+                          Priority: {task.priority}
                         </span>
                       </div>
                     </div>
-                    <button className="px-4 py-2 bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg text-white font-medium hover:scale-[1.02] transition-transform">
-                      Join
+                    <button onClick={() => openTaskModal(task)} className="p-2 bg-purple-500/20 border border-purple-500/30 rounded-lg text-purple-300 hover:bg-purple-500/30 transition">
+                      <Edit2 className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
@@ -190,7 +206,7 @@ export default function VolunteerDashboard({ onLogout }: { onLogout: () => void 
               <option value="assigned">Assigned</option>
               <option value="accepted">Accepted</option>
               <option value="rejected">Rejected</option>
-              <option value="completed">Completed</option>
+              <option value="pending_verification">Request Verification</option>
             </select>
           </div>
           <div className="flex gap-3 mt-6">

@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from database import engine
 import models
-from routers import auth, reports, tasks, resources
+from routers import auth, reports, tasks, resources, stats
 import os
 
 # Create tables
@@ -29,6 +29,7 @@ app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 app.include_router(reports.router, prefix="/api/reports", tags=["Reports"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["Tasks"])
 app.include_router(resources.router, prefix="/api/resources", tags=["Resources"])
+app.include_router(stats.router, prefix="/api/stats", tags=["Stats"])
 
 
 @app.get("/")

@@ -45,14 +45,8 @@ export default function LiveDataPage({ onBack }: BackProps) {
 	useEffect(() => {
 		if (!mapContainer.current) return;
 
-		const indiaBounds: L.LatLngBoundsExpression = [
-			[5, 75],
-			[20, 85],
-		];
-
 		// Create Map
 		const map = L.map(mapContainer.current, {
-			maxBounds: indiaBounds,
 			maxBoundsViscosity: 1.0,
 			minZoom: 5,
 		}).setView([18, 80], 4);
