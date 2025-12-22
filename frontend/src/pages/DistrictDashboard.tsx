@@ -70,7 +70,7 @@ export default function DistrictDashboard({ onLogout }: { onLogout: () => void }
 
   const [isRescueModalOpen, setIsRescueModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
-  const [isVolunteerViewOpen, setIsVolunteerViewOpen] = useState(false);
+  // const [isVolunteerViewOpen, setIsVolunteerViewOpen] = useState(false);
   // const [editingRescue, setEditingRescue] = useState<RescueCenter | null>(null);
   const [editingReport, setEditingReport] = useState<IncidentReport | null>(null);
 
