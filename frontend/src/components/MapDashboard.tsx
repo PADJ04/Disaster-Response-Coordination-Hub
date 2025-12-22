@@ -25,7 +25,7 @@ export default function MapDashboard({
 	const [formData, setFormData] = useState({
 		state: "Karnataka",
 		district: "Kalaburagi",
-		date: "August 2019",
+		date: new Date().toISOString().split("T")[0],
 	});
 	const [loading, setLoading] = useState(false);
 	const [searchResults, setSearchResults] = useState<FloodEvent[]>([]);
@@ -146,6 +146,13 @@ export default function MapDashboard({
 
 	// --- API CONNECT LOGIC ---
 	const handleSearch = async () => {
+		const today = new Date().toISOString().split("T")[0];
+
+		// ⛔ Date validation
+		if (formData.date > today) {
+			alert("Please select a date that is not in the future.");
+			return;
+		}
 		setLoading(true);
 		setSearchResults([]); // Clear previous
 		try {
@@ -277,13 +284,13 @@ export default function MapDashboard({
 								Target Date
 							</label>
 							<input
-								type="text"
+								type="date"
 								value={formData.date}
+								max={new Date().toISOString().split("T")[0]} // ⛔ blocks future dates
 								onChange={(e) =>
 									setFormData({ ...formData, date: e.target.value })
 								}
 								className="w-full bg-slate-900 border border-blue-500/30 rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition"
-								placeholder="e.g. August 2019"
 							/>
 						</div>
 						<div className="grid grid-cols-2 gap-2">
