@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Disaster Response - Route Optimization</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+  <style>
+    /* ... (KEEP ALL YOUR EXISTING CSS STYLES THE SAME) ... */
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    #map { height: 100vh; }
+    .leaflet-draw-toolbar, .leaflet-control-zoom { display: none !important; }
+    .sidebar { position: fixed; left: 20px; top: 20px; width: 360px; max-height: 90vh; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: #fff; padding: 20px; overflow-y: auto; z-index: 1000; box-shadow: 0 8px 32px rgba(0,0,0,0.3); border-radius: 12px; }
+    .header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid rgba(255,255,255,0.1); }
+    .header h1 { margin: 0; font-size: 20px; font-weight: 700; }
+    .tool-section { margin-bottom: 20px; }
+    .tool-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #64b5f6; margin-bottom: 10px; }
+    .tool-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+    .tool-buttons.full { grid-template-columns: 1fr; }
+    button { padding: 10px 12px; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
+    .btn-primary { background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%); color: #fff; }
+    .btn-danger { background: linear-gradient(135deg, #d32f2f 0%, #c62828 100%); color: #fff; }
+    .btn-success { background: linear-gradient(135deg, #388e3c 0%, #2e7d32 100%); color: #fff; width: 100%; }
+    .btn-secondary { background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); }
+    .zoom-controls { display: flex; gap: 6px; margin-bottom: 10px; }
+    .zoom-btn { flex: 1; padding: 8px; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; cursor: pointer; }
+    select { width: 100%; padding: 8px 10px; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; font-size: 12px; background: rgba(255,255,255,0.1); color: #fff; }
+    .divider { height: 1px; background: rgba(255,255,255,0.1); margin: 15px 0; }
+    .result-box { background: rgba(100,181,246,0.1); border: 1px solid rgba(100,181,246,0.3); border-radius: 6px; padding: 10px; margin-top: 12px; font-size: 12px; line-height: 1.5; }
+    .result-box strong { color: #64b5f6; }
+  </style>
+</head>
+<body>
+
+<div class="sidebar" id="sidebar">
+  <div class="header" id="sidebarHeader">
+    <i class="fas fa-exclamation-triangle" style="font-size: 20px; color: #ff6b6b;"></i>
+    <h1>Disaster Route</h1>
+  </div>
+  <div class="tool-section">
+    <div class="tool-title">Map Controls</div>
+    <div class="zoom-controls">
+      <button class="zoom-btn" id="zoomIn"><i class="fas fa-plus"></i></button>
+      <button class="zoom-btn" id="zoomOut"><i class="fas fa-minus"></i></button>
+    </div>
+  </div>
+  <div class="divider"></div>
+  <div class="tool-section">
+    <div class="tool-title">Hazard Zone</div>
+    <div class="tool-buttons full">
+      <button class="btn-primary" id="drawBtn"><i class="fas fa-draw-polygon"></i> Draw</button>
+    </div>
+    <div class="tool-buttons">
+      <button class="btn-danger" id="blockBtn" disabled><i class="fas fa-ban"></i> Block</button>
+      <button class="btn-secondary" id="clearZoneBtn"><i class="fas fa-trash"></i> Clear</button>
+    </div>
+  </div>
+  <div class="divider"></div>
+  <div class="tool-section">
+    <div class="tool-title">Route Points</div>
+    <div class="tool-buttons">
+      <button class="btn-primary" id="startBtn"><i class="fas fa-map-pin"></i> Start</button>
+      <button class="btn-primary" id="endBtn"><i class="fas fa-flag"></i> End</button>
+    </div>
+  </div>
+  <div class="divider"></div>
+  <div class="tool-section">
+    <div class="tool-title">Transport</div>
+    <select id="profile"><option value="car">Car</option><option value="foot">Pedestrian</option></select>
+  </div>
+  <div class="divider"></div>
+  <div class="tool-section">
+    <button class="btn-success" id="calcBtn"><i class="fas fa-route"></i> Calculate</button>
+    <div id="resultBox"></div>
+  </div>
+  <div class="tool-section">
+    <button class="btn-secondary" id="resetBtn" style="width: 100%;"><i class="fas fa-redo"></i> Reset</button>
+  </div>
+</div>
+
+<div id="map"></div>
+
+<script>
+  // UI LOGIC
+  const sidebar = document.getElementById('sidebar');
+  const header = document.getElementById('sidebarHeader');
+  let isDragging = false, offset = { x: 0, y: 0 };
+  
+  header.addEventListener('mousedown', (e) => { isDragging = true; offset.x = e.clientX - sidebar.offsetLeft; offset.y = e.clientY - sidebar.offsetTop; });
+  document.addEventListener('mousemove', (e) => { if (isDragging) { sidebar.style.left = (e.clientX - offset.x) + 'px'; sidebar.style.top = (e.clientY - offset.y) + 'px'; } });
+  document.addEventListener('mouseup', () => { isDragging = false; });
+
+  // MAP INITIALIZATION
+  const map = L.map('map').setView([15.434, 75.013], 15);
+  
+  const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' });
+  const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles &copy; Esri' });
+  streetLayer.addTo(map);
+  L.control.layers({ "Street": streetLayer, "Satellite": satelliteLayer }).addTo(map);
+
+  document.getElementById('zoomIn').onclick = () => map.zoomIn();
+  document.getElementById('zoomOut').onclick = () => map.zoomOut();
+
+  // === NEW GEOJSON LOADER FOR FLOOD POLYGONS ===
+  fetch('Karnataka_Flood_Polygons.geojson')
+    .then(response => response.json())
+    .then(data => {
+      const floodLayer = L.geoJSON(data, {
+        style: {
+          color: '#ff6b6b',    // Outline Color
+          weight: 2,           // Outline Width
+          opacity: 1,
+          fillColor: '#ff6b6b', // Fill Color
+          fillOpacity: 0.5     // Fill Opacity
+        },
+        onEachFeature: function (feature, layer) {
+          if (feature.properties) {
+             const area = feature.properties.area_sqkm ? feature.properties.area_sqkm.toFixed(2) : "N/A";
+             const id = feature.properties.polygon_id || "N/A";
+             layer.bindPopup(`
+               <div style="text-align:center;">
+                 <b>Flood Zone Details</b><br>
+                 <hr style="margin:5px 0; border:0; border-top:1px solid #ccc;">
+                 <b>Area:</b> ${area} km²<br>
+                 <b>ID:</b> ${id}
+               </div>
+             `);
+          }
+        }
+      }).addTo(map);
+
+      // Zoom map to fit the flood data
+      map.fitBounds(floodLayer.getBounds());
+    })
+    .catch(err => console.error('Error loading GeoJSON:', err));
+  // ============================================
+
+  // DRAWING TOOLS & ROUTING (Same as before)
+  const drawnItems = new L.FeatureGroup();
+  map.addLayer(drawnItems);
+  const drawControl = new L.Control.Draw({ draw: { polygon: true, polyline: false, rectangle: false, circle: false, marker: false }, edit: { featureGroup: drawnItems } });
+  map.addControl(drawControl);
+
+  let mode = null, startMarker = null, endMarker = null, routeLine = null;
+  let blockZoneBlocked = false, blockZonePolygon = null;
+  let drawMode = false;
+
+  map.on('draw:created', e => { drawnItems.addLayer(e.layer); blockZonePolygon = e.layer; document.getElementById('blockBtn').disabled = false; document.getElementById('drawBtn').classList.remove('active'); drawMode = false; });
+  document.getElementById('drawBtn').onclick = () => { drawMode = !drawMode; document.getElementById('drawBtn').classList.toggle('active', drawMode); if (drawMode) new L.Draw.Polygon(map, drawControl.options.draw.polygon).enable(); };
+  document.getElementById('blockBtn').onclick = () => { if (!blockZonePolygon) return; blockZoneBlocked = !blockZoneBlocked; document.getElementById('blockBtn').classList.toggle('active', blockZoneBlocked); blockZonePolygon.setStyle({ color: blockZoneBlocked ? '#2e7d32' : '#d32f2f', fillOpacity: blockZoneBlocked ? 0.3 : 0.2 }); };
+  document.getElementById('clearZoneBtn').onclick = () => { drawnItems.clearLayers(); blockZonePolygon = null; blockZoneBlocked = false; document.getElementById('blockBtn').disabled = true; document.getElementById('blockBtn').classList.remove('active'); };
+  
+  document.getElementById('startBtn').onclick = () => { mode = mode === 'start' ? null : 'start'; document.getElementById('startBtn').classList.toggle('active', mode === 'start'); };
+  document.getElementById('endBtn').onclick = () => { mode = mode === 'end' ? null : 'end'; document.getElementById('endBtn').classList.toggle('active', mode === 'end'); };
+
+  map.on('click', e => {
+    if (!mode) return;
+    if (mode === 'start') { if (startMarker) map.removeLayer(startMarker); startMarker = L.marker(e.latlng).addTo(map).bindPopup('START').openPopup(); document.getElementById('startBtn').classList.remove('active'); mode = null; }
+    if (mode === 'end') { if (endMarker) map.removeLayer(endMarker); endMarker = L.marker(e.latlng).addTo(map).bindPopup('END').openPopup(); document.getElementById('endBtn').classList.remove('active'); mode = null; }
+  });
+
+  document.getElementById('resetBtn').onclick = () => {
+    if (startMarker) map.removeLayer(startMarker); if (endMarker) map.removeLayer(endMarker); if (routeLine) map.removeLayer(routeLine);
+    drawnItems.clearLayers(); startMarker = endMarker = routeLine = blockZonePolygon = null; blockZoneBlocked = false;
+    document.getElementById('blockBtn').disabled = true; document.getElementById('blockBtn').classList.remove('active');
+    document.getElementById('resultBox').innerHTML = ''; mode = null;
+  };
+
+  function buildBlockZoneGeoJSON() {
+    if (!blockZonePolygon) return null;
+    const latlngs = blockZonePolygon.getLatLngs()[0];
+    const coords = latlngs.map(ll => [ll.lng, ll.lat]); coords.push(coords[0]);
+    return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [coords] } };
+  }
+
+  document.getElementById('calcBtn').onclick = async () => {
+    if (!startMarker || !endMarker) return;
+    const s = startMarker.getLatLng(), e = endMarker.getLatLng(), profile = document.getElementById('profile').value;
+    const body = { profile: profile, points: [[s.lng, s.lat], [e.lng, e.lat]], points_encoded: false };
+    if (blockZoneBlocked && blockZonePolygon) {
+      body.custom_model = { areas: { block_zone: buildBlockZoneGeoJSON() }, priority: [{ if: 'in_block_zone', multiply_by: 0 }] };
+    }
+    try {
+      const res = await fetch('http://localhost:8989/route?profile=' + profile + '&points_encoded=false', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.paths || !data.paths.length) return;
+      if (routeLine) map.removeLayer(routeLine);
+      const coords = data.paths[0].points.coordinates.map(c => [c[1], c[0]]);
+      routeLine = L.polyline(coords, { color: '#1976d2', weight: 5, opacity: 0.8 }).addTo(map);
+      map.fitBounds(L.latLngBounds(coords), { padding: [100, 100] });
+      const km = (data.paths[0].distance / 1000).toFixed(2), mins = (data.paths[0].time / 60000).toFixed(1);
+      document.getElementById('resultBox').innerHTML = `<div class="result-box"><strong>Route Calculated</strong><br>Distance: <strong>${km} km</strong><br>ETA: <strong>${mins} min</strong></div>`;
+    } catch (err) {}
+  };
+</script>
+</body>
+</html>
