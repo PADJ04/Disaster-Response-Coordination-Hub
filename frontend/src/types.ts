@@ -51,3 +51,14 @@ export interface Report {
   created_at: string;
   images: { id: string; image_url: string }[];
 }
+
+export interface RescueCenter {
+  id: string;
+  name: string;
+  address: string;
+  capacity?: number;
+  contact?: string;
+  latitude?: number;
+  longitude?: number;
+  created_at: string;
+}

@@ -4,7 +4,8 @@ import "leaflet/dist/leaflet.css";
 import "leaflet-draw/dist/leaflet.draw.css";
 import "leaflet-draw";
 
-import type { BackProps } from "../types";
+import type { BackProps, RescueCenter } from "../types";
+import { getRescueCenters } from "../api";
 import MapDashboard from "../components/MapDashboard";
 import NavigatorDashboard from "../components/NavigatorDashboard";
 
@@ -15,10 +16,21 @@ const DefaultIcon = L.icon({
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
+const RescueCenterIcon = L.divIcon({
+	className: "custom-div-icon",
+	html: `<div style="background-color: white; border-radius: 50%; border: 2px solid #d32f2f; width: 32px; height: 32px; display: flex; justify-content: center; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#d32f2f" width="20" height="20"><path d="M12 2L2 12h3v8h6v-6h2v6h6v-8h3L12 2zm1 14h-2v-2h2v2zm0-4h-2V7h2v5z"/></svg>
+         </div>`,
+	iconSize: [32, 32],
+	iconAnchor: [16, 16],
+	popupAnchor: [0, -16],
+});
+
 export default function LiveDataPage({ onBack }: BackProps) {
 	const mapContainer = useRef<HTMLDivElement>(null);
 	const mapInstance = useRef<L.Map | null>(null); // To access map later
 	const floodLayerRef = useRef<L.LayerGroup | null>(null); // To store and clear flood markers
+	const rescueCenterLayerRef = useRef<L.LayerGroup | null>(null);
 
 	const drawnItemsRef = useRef<L.FeatureGroup>(new L.FeatureGroup());
 	const drawControlRef = useRef<L.Control.Draw | null>(null);
@@ -28,6 +40,7 @@ export default function LiveDataPage({ onBack }: BackProps) {
 	const blockPolygonRef = useRef<L.Polygon | null>(null);
 	const stateLayersRef = useRef<L.GeoJSON[]>([]);
 
+	const [rescueCenters, setRescueCenters] = useState<RescueCenter[]>([]);
 	const [clickMode, setClickMode] = useState<"start" | "end" | null>(null);
 	const [isDrawing, setIsDrawing] = useState(false); // <--- Add this
 	const [isBlockActive, setIsBlockActive] = useState(false);
@@ -36,14 +49,61 @@ export default function LiveDataPage({ onBack }: BackProps) {
 		time: string;
 	} | null>(null);
 	const [profile, setProfile] = useState("car");
+    const [isMapReady, setIsMapReady] = useState(false);
 
 	const [infoVisible, setInfoVisible] = useState(true);
 	const [dashboardOpen, setDashboardOpen] = useState(false);
 	const [navigatorOpen, setNavigatorOpen] = useState(false);
 
+	// Fetch Rescue Centers
+	useEffect(() => {
+		getRescueCenters()
+			.then(setRescueCenters)
+			.catch((err) => console.error("Failed to fetch rescue centers:", err));
+	}, []);
+
+	// Render Rescue Centers
+	useEffect(() => {
+		if (!isMapReady || !mapInstance.current) return;
+
+		// Initialize layer if needed
+		if (!rescueCenterLayerRef.current) {
+			rescueCenterLayerRef.current = L.layerGroup();
+		} else {
+			rescueCenterLayerRef.current.clearLayers();
+		}
+
+		rescueCenters.forEach((center) => {
+			if (center.latitude && center.longitude) {
+				const marker = L.marker([center.latitude, center.longitude], {
+					icon: RescueCenterIcon,
+				});
+				marker.bindPopup(`
+                    <div style="min-width: 200px;">
+                        <h3 style="font-weight: bold; font-size: 1.1em; margin-bottom: 5px;">${
+													center.name
+												}</h3>
+                        <p style="margin: 0; color: #555;">${center.address}</p>
+                        <hr style="margin: 8px 0; border: 0; border-top: 1px solid #eee;" />
+                        <div style="font-size: 0.9em;">
+                            <p style="margin: 2px 0;"><strong>Capacity:</strong> ${
+															center.capacity || "N/A"
+														}</p>
+                            <p style="margin: 2px 0;"><strong>Contact:</strong> ${
+															center.contact || "N/A"
+														}</p>
+                        </div>
+                    </div>
+                `);
+				rescueCenterLayerRef.current?.addLayer(marker);
+			}
+		});
+	}, [rescueCenters, isMapReady]);
+
 	// --- 1. Map Initialization (Preserving existing logic) ---
 	useEffect(() => {
 		if (!mapContainer.current) return;
+        if (mapInstance.current) return;
 
 		// Create Map
 		const map = L.map(mapContainer.current, {
@@ -63,6 +123,27 @@ export default function LiveDataPage({ onBack }: BackProps) {
 		// Create a Layer Group for future flood markers
 		floodLayerRef.current = L.layerGroup().addTo(map);
 
+        // Initialize Rescue Center Layer (but don't add to map yet)
+        rescueCenterLayerRef.current = L.layerGroup();
+
+        // Zoom Listener for Rescue Centers
+        const handleZoom = () => {
+            if (!map || !rescueCenterLayerRef.current) return;
+            // Zoom level 10 is roughly "district/city" view. 
+            // Adjust this threshold if "20km" implies a different scale.
+            if (map.getZoom() >= 10) {
+                if (!map.hasLayer(rescueCenterLayerRef.current)) {
+                    map.addLayer(rescueCenterLayerRef.current);
+                }
+            } else {
+                if (map.hasLayer(rescueCenterLayerRef.current)) {
+                    map.removeLayer(rescueCenterLayerRef.current);
+                }
+            }
+        };
+        map.on('zoomend', handleZoom);
+        handleZoom(); // Initial check
+
 		map.addLayer(drawnItemsRef.current);
 
 		const drawControl = new L.Control.Draw({
@@ -77,6 +158,7 @@ export default function LiveDataPage({ onBack }: BackProps) {
 			edit: { featureGroup: drawnItemsRef.current },
 		});
 		drawControlRef.current = drawControl;
+        map.addControl(drawControl); // Ensure control is added
 
 		// 3. Event: When a Polygon is drawn
 		map.on(L.Draw.Event.CREATED, (e: any) => {
@@ -124,6 +206,7 @@ export default function LiveDataPage({ onBack }: BackProps) {
 			fetch(st.file)
 				.then((res) => res.json())
 				.then((geo) => {
+                    if (!mapInstance.current) return; // Check if map still exists
 					const layer = L.geoJSON(geo, {
 						style: { color: st.color, weight: 2, fillOpacity: 0.15 },
 						onEachFeature: (_, layer) => {
@@ -137,8 +220,15 @@ export default function LiveDataPage({ onBack }: BackProps) {
 				.catch((err) => console.error("Error loading:", st.file, err));
 		});
 
+        setIsMapReady(true);
+
 		return () => {
+            setIsMapReady(false);
 			map.remove();
+            mapInstance.current = null;
+            floodLayerRef.current = null;
+            rescueCenterLayerRef.current = null;
+            stateLayersRef.current = [];
 		};
 	}, []);
 

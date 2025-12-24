@@ -28,13 +28,16 @@ async def create_report(
     if images and len(images) > 5:
         raise HTTPException(status_code=400, detail="Maximum 5 images allowed")
 
+    # Handle anonymous reports
+    final_user_id = user_id if user_id != "anonymous" else None
+
     new_report = models.Report(
         title=title,
         description=description,
         severity=severity,
         latitude=latitude,
         longitude=longitude,
-        user_id=user_id
+        user_id=final_user_id
     )
     db.add(new_report)
     db.commit()

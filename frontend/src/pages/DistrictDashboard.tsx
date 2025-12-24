@@ -3,7 +3,7 @@ import { Trash2, Plus, LogOut, CheckCircle, XCircle } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import Modal from '../components/Modal';
 import api, { createTask, getTasks, updateTaskStatus } from '../api';
-import type { Task } from '../types';
+import type { Task, RescueCenter } from '../types';
 import L from 'leaflet';
 
 // Fix for default marker icon
@@ -30,16 +30,6 @@ function LocationMarker({ position, setPosition }: { position: { lat: number, ln
     <Marker position={position}></Marker>
   );
 }
-
-type RescueCenter = {
-  id: string;
-  name: string;
-  address: string;
-  capacity?: number;
-  contact?: string;
-  latitude?: number;
-  longitude?: number;
-};
 
 type IncidentReport = {
   id: string;

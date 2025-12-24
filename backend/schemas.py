@@ -46,7 +46,7 @@ class ReportResponse(ReportBase):
     id: str
     status: str
     created_at: datetime
-    user_id: str
+    user_id: Optional[str]
     images: List[ReportImageResponse] = []
 
     class Config:

@@ -25,4 +25,9 @@ export const createTask = async (task: any, token: string) => {
   return response.data;
 };
 
+export const getRescueCenters = async () => {
+  const response = await api.get('/resources/rescue-centers/');
+  return response.data;
+};
+
 export default api;
