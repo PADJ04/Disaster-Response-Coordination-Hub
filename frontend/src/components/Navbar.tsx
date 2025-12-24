@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { Globe, Menu, X } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import type { TabType } from '../types';
 
 interface NavbarProps {
@@ -10,7 +9,6 @@ interface NavbarProps {
 }
 
 export default function Navbar({ setActiveTab, loggedInRole, onLogout }: NavbarProps) {
-  const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -24,6 +22,8 @@ export default function Navbar({ setActiveTab, loggedInRole, onLogout }: NavbarP
   const handleNavClick = (item: string) => {
     if (item === 'Live Data') {
       setActiveTab('live-data');
+    } else if (item === 'Overview') {
+      setActiveTab('home');
     }
     setIsMenuOpen(false);
   };
@@ -48,7 +48,7 @@ export default function Navbar({ setActiveTab, loggedInRole, onLogout }: NavbarP
 
         {/* Desktop Links */}
         <div className="hidden md:flex items-center gap-8">
-          {['Overview', 'Live Data', 'Missions', 'Community'].map((item) => (
+          {['Overview', 'Live Data'].map((item) => (
             <button 
               key={item} 
               onClick={() => handleNavClick(item)}
@@ -57,14 +57,6 @@ export default function Navbar({ setActiveTab, loggedInRole, onLogout }: NavbarP
               {item}
             </button>
           ))}
-          {loggedInRole === 'district' && (
-            <button 
-              onClick={() => navigate('/volunteer-dashboard')}
-              className="text-sm font-medium text-white/70 hover:text-blue-400 transition-colors uppercase tracking-widest"
-            >
-              Volunteer View
-            </button>
-          )}
           {loggedInRole ? (
             <button onClick={onLogout} className="w-10 h-10 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full backdrop-blur-sm transition-all flex items-center justify-center text-sm font-medium">
               {loggedInRole === 'volunteer' ? 'V' : 'D'}
@@ -89,7 +81,7 @@ export default function Navbar({ setActiveTab, loggedInRole, onLogout }: NavbarP
       {isMenuOpen && (
         <div className="absolute top-full left-0 w-full bg-black/95 backdrop-blur-xl border-b border-white/10 p-6 md:hidden animate-fade-in-down">
           <div className="flex flex-col gap-6">
-            {['Overview', 'Live Data', 'Missions', 'Community'].map((item) => (
+            {['Overview', 'Live Data'].map((item) => (
               <button 
                 key={item}
                 onClick={() => handleNavClick(item)}

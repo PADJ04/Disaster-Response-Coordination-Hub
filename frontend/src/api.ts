@@ -30,4 +30,9 @@ export const getRescueCenters = async () => {
   return response.data;
 };
 
+export const getReports = async () => {
+  const response = await api.get('/reports/');
+  return response.data;
+};
+
 export default api;

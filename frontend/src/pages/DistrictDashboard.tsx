@@ -188,6 +188,10 @@ export default function DistrictDashboard({ onLogout }: { onLogout: () => void }
       setTaskTitle('');
       setTaskDescription('');
       setSelectedVolunteer(null);
+      
+      // Refresh tasks
+      const tasksData = await getTasks(token);
+      setTasks(tasksData);
     } catch (err) {
       console.error(err);
       alert('Failed to assign task');
@@ -208,6 +212,12 @@ export default function DistrictDashboard({ onLogout }: { onLogout: () => void }
       const status = approved ? 'completed' : 'assigned';
       const updatedTask = await updateTaskStatus(taskId, status, token);
       setTasks(tasks.map(t => t.id === updatedTask.id ? updatedTask : t));
+      
+      // Refresh reports to update status
+      if (approved) {
+        const repRes = await api.get('/reports/', { headers: { Authorization: `Bearer ${token}` } });
+        setReports(repRes.data);
+      }
     } catch (err) {
       console.error(err);
       alert("Failed to update task status");
@@ -217,9 +227,19 @@ export default function DistrictDashboard({ onLogout }: { onLogout: () => void }
   const filteredReports = reports.filter(r => {
     if (reportFilter === 'all') return true;
     if (reportFilter === 'completed') return r.status === 'resolved';
+    
     const isAssigned = tasks.some(t => t.report_id === r.id);
-    if (reportFilter === 'assigned') return isAssigned;
-    if (reportFilter === 'unassigned') return !isAssigned && r.status !== 'resolved';
+    
+    if (reportFilter === 'assigned') {
+      // Assigned means it has a task AND it is not yet resolved
+      return isAssigned && r.status !== 'resolved';
+    }
+    
+    if (reportFilter === 'unassigned') {
+      // Unassigned means no task AND not resolved
+      return !isAssigned && r.status !== 'resolved';
+    }
+    
     return true;
   });
 
@@ -230,7 +250,7 @@ export default function DistrictDashboard({ onLogout }: { onLogout: () => void }
         {/* Header */}
         <div className="flex justify-between items-center bg-blue-900/20 p-6 rounded-2xl border border-blue-500/30">
           <div>
-            <h1 className="text-3xl font-bold text-blue-400">District Command Center</h1>
+            <h1 className="text-3xl font-bold text-blue-400">District Dashboard</h1>
             <p className="text-blue-200/60">Overview of resources and incidents</p>
           </div>
           <div className="flex gap-3">
@@ -247,7 +267,7 @@ export default function DistrictDashboard({ onLogout }: { onLogout: () => void }
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-gray-900/50 p-6 rounded-2xl border border-white/10">
             <h3 className="text-gray-400 text-sm uppercase tracking-wider">Active Incidents</h3>
-            <p className="text-4xl font-bold text-white mt-2">{reports.length}</p>
+            <p className="text-4xl font-bold text-white mt-2">{reports.filter(r => r.status !== 'resolved').length}</p>
           </div>
           <div className="bg-gray-900/50 p-6 rounded-2xl border border-white/10">
             <h3 className="text-gray-400 text-sm uppercase tracking-wider">Rescue Centers</h3>
@@ -302,10 +322,9 @@ export default function DistrictDashboard({ onLogout }: { onLogout: () => void }
                 onChange={(e) => setReportFilter(e.target.value as any)}
                 className="bg-black/40 border border-white/10 rounded-lg px-3 py-1 text-sm text-white focus:outline-none"
               >
-                <option value="all">All</option>
+                <option value="all">Active</option>
                 <option value="assigned">Assigned</option>
                 <option value="unassigned">Unassigned</option>
-                <option value="completed">Completed</option>
               </select>
             </div>
             <div className="p-6 space-y-4 max-h-[400px] overflow-y-auto">
@@ -398,11 +417,41 @@ export default function DistrictDashboard({ onLogout }: { onLogout: () => void }
               ))}
               {rescueCenters.length === 0 && <p className="text-gray-500 text-center py-4 col-span-full">No rescue centers added</p>}
             </div>
+            </div>
+
+            {/* Completed Tasks History (placed inside grid to match Rescue Centers width) */}
+            <div className="bg-green-900/10 rounded-2xl border border-green-500/20 overflow-hidden col-span-1 lg:col-span-2">
+            <div className="p-6 border-b border-green-500/20 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-green-400">Completed Tasks</h2>
+            </div>
+            <div className="p-6">
+               {tasks.filter(t => t.status === 'completed').length === 0 ? (
+                 <p className="text-gray-500">No completed tasks yet.</p>
+               ) : (
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                   {tasks.filter(t => t.status === 'completed').map(task => {
+                     const vol = volunteers.find(v => v.id === task.volunteer_id);
+                     return (
+                       <div key={task.id} className="bg-black/40 p-4 rounded-xl border border-green-500/10">
+                         <div className="flex justify-between items-start mb-2">
+                           <h3 className="font-bold text-white">{task.title}</h3>
+                           <span className="text-xs px-2 py-1 bg-green-500/20 text-green-400 rounded">Completed</span>
+                         </div>
+                         <p className="text-sm text-gray-400 mb-2">{task.description}</p>
+                         <div className="text-xs text-gray-500">
+                           <p>Volunteer: <span className="text-white">{vol?.name || 'Unknown'}</span></p>
+                           <p>Date: {new Date(task.created_at).toLocaleDateString()}</p>
+                         </div>
+                       </div>
+                     );
+                   })}
+                 </div>
+               )}
+            </div>
+            </div>
+
           </div>
-
-        </div>
-      </div>
-
+          </div>
       {/* Rescue Center Modal */}
       <Modal open={isRescueModalOpen} onClose={() => setIsRescueModalOpen(false)} title="Add Rescue Center" className="resize overflow-auto max-w-none w-[90vw] h-[90vh]">
         <div className="relative w-full h-full rounded-lg overflow-hidden border border-white/10">

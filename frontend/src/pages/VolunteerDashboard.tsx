@@ -1,17 +1,36 @@
 import { useState, useEffect } from 'react';
 import { Edit2, MapPin } from 'lucide-react';
+import { MapContainer, TileLayer, Marker } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import Modal from '../components/Modal';
 import api, { getTasks, updateTaskStatus as apiUpdateTaskStatus } from '../api';
 import type { Task, Report } from '../types';
 
+// Fix Leaflet Default Icon
+import icon from 'leaflet/dist/images/marker-icon.png';
+import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+
+let DefaultIcon = L.icon({
+    iconUrl: icon,
+    shadowUrl: iconShadow,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41]
+});
+
+L.Marker.prototype.options.icon = DefaultIcon;
+
 export default function VolunteerDashboard({ onLogout }: { onLogout: () => void }) {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [reports, setReports] = useState<Report[]>([]);
   // const [availableMissions, setAvailableMissions] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [, setError] = useState<string | null>(null);
 
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [selectedTaskLocation, setSelectedTaskLocation] = useState<{lat: number, lng: number} | null>(null);
   const [taskStatus, setTaskStatus] = useState<'assigned' | 'accepted' | 'rejected' | 'completed' | 'pending_verification'>('assigned');
 
   const [filterMonth, setFilterMonth] = useState<string>('');
@@ -23,8 +42,12 @@ export default function VolunteerDashboard({ onLogout }: { onLogout: () => void 
         const token = localStorage.getItem('token');
         if (!token) return;
         
-        const tasksData = await getTasks(token);
+        const [tasksData, reportsRes] = await Promise.all([
+            getTasks(token),
+            api.get('/reports/', { headers: { Authorization: `Bearer ${token}` } })
+        ]);
         setTasks(tasksData);
+        setReports(reportsRes.data);
       } catch (err) {
         console.error("Failed to fetch data", err);
         setError("Failed to load dashboard data");
@@ -50,6 +73,17 @@ export default function VolunteerDashboard({ onLogout }: { onLogout: () => void 
     setEditingTask(task);
     setTaskStatus(task.status);
     setIsTaskModalOpen(true);
+  };
+
+  const handleViewLocation = (reportId?: string) => {
+    if (!reportId) return;
+    const report = reports.find(r => r.id === reportId);
+    if (report) {
+      setSelectedTaskLocation({ lat: report.latitude, lng: report.longitude });
+      setIsMapModalOpen(true);
+    } else {
+        alert("Report location not found");
+    }
   };
 
   const handleUpdateTaskStatus = async () => {
@@ -152,6 +186,11 @@ export default function VolunteerDashboard({ onLogout }: { onLogout: () => void 
                       <Edit2 className="w-4 h-4" />
                     </button>
                   </div>
+                  <div className="mt-2">
+                     <button onClick={() => handleViewLocation(task.report_id)} className="text-xs px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full border border-blue-500/30 flex items-center gap-1 hover:bg-blue-500/30 transition">
+                       <MapPin className="w-3 h-3" /> View Location
+                     </button>
+                  </div>
                 </div>
               ))
             )}
@@ -186,6 +225,42 @@ export default function VolunteerDashboard({ onLogout }: { onLogout: () => void 
                       <Edit2 className="w-4 h-4" />
                     </button>
                   </div>
+                  <div className="mt-2">
+                     <button onClick={() => handleViewLocation(task.report_id)} className="text-xs px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full border border-blue-500/30 flex items-center gap-1 hover:bg-blue-500/30 transition">
+                       <MapPin className="w-3 h-3" /> View Location
+                     </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Completed Tasks Section */}
+        <div className="mt-8">
+          <h2 className="text-2xl font-bold text-white mb-4">Completed Tasks</h2>
+          <div className="space-y-3">
+            {tasks.filter(t => t.status === 'completed').length === 0 ? (
+              <div className="p-6 text-center text-white/60 bg-white/5 border border-white/10 rounded-lg">No completed tasks</div>
+            ) : (
+              tasks.filter(t => t.status === 'completed').map((task) => (
+                <div key={task.id} className="p-4 bg-black/40 border border-green-500/20 rounded-lg hover:border-green-500/40 transition">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="font-bold text-white text-lg">{task.title}</h3>
+                        <span className={`text-xs px-3 py-1 rounded-full border font-medium ${getStatusColor(task.status)}`}>
+                          {task.status}
+                        </span>
+                      </div>
+                      <p className="text-sm text-white/70 mb-3">{task.description}</p>
+                      <div className="flex items-center gap-2">
+                         <button onClick={() => handleViewLocation(task.report_id)} className="text-xs px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full border border-blue-500/30 flex items-center gap-1 hover:bg-blue-500/30 transition">
+                           <MapPin className="w-3 h-3" /> View Location
+                         </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               ))
             )}
@@ -194,29 +269,85 @@ export default function VolunteerDashboard({ onLogout }: { onLogout: () => void 
       </div>
 
       {/* Update Task Status Modal */}
-      <Modal open={isTaskModalOpen} onClose={() => setIsTaskModalOpen(false)} title="Update Task Status">
-        <div className="space-y-4">
-          <div>
-            <h3 className="font-bold text-white mb-2">{editingTask?.title}</h3>
-            <p className="text-sm text-white/70">{editingTask?.description}</p>
+      <Modal open={isTaskModalOpen} onClose={() => setIsTaskModalOpen(false)} title="Task Details & Status">
+        <div className="space-y-6">
+          {/* Task Info */}
+          <div className="bg-white/5 p-4 rounded-lg border border-white/10">
+            <h3 className="font-bold text-xl text-white mb-2">{editingTask?.title}</h3>
+            <p className="text-white/80 mb-4">{editingTask?.description}</p>
+            <div className="flex gap-4 text-sm text-white/60">
+                <span>Priority: <span className="text-white">{editingTask?.priority}</span></span>
+                <span>Date: <span className="text-white">{editingTask ? new Date(editingTask.created_at).toLocaleDateString() : ''}</span></span>
+            </div>
           </div>
+
+          {/* Associated Report Details */}
+          {editingTask?.report_id && (() => {
+              const report = reports.find(r => r.id === editingTask.report_id);
+              if (!report) return null;
+              return (
+                  <div className="bg-blue-900/20 p-4 rounded-lg border border-blue-500/30">
+                      <h4 className="font-bold text-blue-300 mb-2 text-sm uppercase tracking-wider">Incident Report</h4>
+                      <p className="text-white font-medium mb-1">{report.title}</p>
+                      <p className="text-white/70 text-sm mb-3">{report.description}</p>
+                      <div className="flex gap-4 text-xs text-white/50 mb-3">
+                          <span>Severity: <span className="text-white">{report.severity}</span></span>
+                          <span>Status: <span className="text-white">{report.status}</span></span>
+                      </div>
+                      
+                      {/* Images */}
+                      {report.images && report.images.length > 0 && (
+                          <div>
+                              <p className="text-xs text-white/50 mb-2">Evidence:</p>
+                              <div className="flex gap-2 overflow-x-auto pb-2">
+                                  {report.images.map(img => (
+                                      <img 
+                                          key={img.id} 
+                                          src={`http://localhost:8000${img.image_url}`} 
+                                          alt="Evidence" 
+                                          className="w-24 h-24 object-cover rounded-lg border border-white/10 cursor-pointer hover:opacity-80 transition"
+                                          onClick={() => window.open(`http://localhost:8000${img.image_url}`, '_blank')}
+                                      />
+                                  ))}
+                              </div>
+                          </div>
+                      )}
+                  </div>
+              );
+          })()}
+
+          {/* Status Update */}
           <div>
-            <label className="text-xs font-bold text-white/60 uppercase tracking-wider mb-2 block">Status</label>
+            <label className="text-xs font-bold text-white/60 uppercase tracking-wider mb-2 block">Update Status</label>
             <select value={taskStatus} onChange={(e) => setTaskStatus(e.target.value as any)} className="w-full p-3 rounded-lg bg-white/5 border border-white/10 text-white focus:border-white/30 focus:outline-none transition">
               <option value="assigned">Assigned</option>
               <option value="accepted">Accepted</option>
               <option value="rejected">Rejected</option>
               <option value="pending_verification">Request Verification</option>
+              <option value="completed">Completed</option>
             </select>
           </div>
-          <div className="flex gap-3 mt-6">
+
+          <div className="flex gap-3 pt-2">
             <button onClick={handleUpdateTaskStatus} className="flex-1 py-3 bg-gradient-to-r from-teal-500 to-teal-600 rounded-lg font-bold text-white hover:scale-[1.02] transition-transform">
               Update Status
             </button>
             <button onClick={() => setIsTaskModalOpen(false)} className="flex-1 py-3 bg-transparent border border-white/10 rounded-lg font-bold text-white/80 hover:bg-white/5 transition">
-              Cancel
+              Close
             </button>
           </div>
+        </div>
+      </Modal>
+
+      {/* Map Modal */}
+      <Modal open={isMapModalOpen} onClose={() => setIsMapModalOpen(false)} title="Task Location">
+        <div className="h-[400px] w-full rounded-lg overflow-hidden relative z-0">
+            {selectedTaskLocation && (
+                <MapContainer center={[selectedTaskLocation.lat, selectedTaskLocation.lng]} zoom={13} style={{ height: '100%', width: '100%' }}>
+                    <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                    <Marker position={[selectedTaskLocation.lat, selectedTaskLocation.lng]} />
+                </MapContainer>
+            )}
         </div>
       </Modal>
     </div>

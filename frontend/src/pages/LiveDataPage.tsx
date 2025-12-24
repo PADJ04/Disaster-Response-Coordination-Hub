@@ -4,8 +4,8 @@ import "leaflet/dist/leaflet.css";
 import "leaflet-draw/dist/leaflet.draw.css";
 import "leaflet-draw";
 
-import type { BackProps, RescueCenter } from "../types";
-import { getRescueCenters } from "../api";
+import type { BackProps, RescueCenter, Report } from "../types";
+import { getRescueCenters, getReports } from "../api";
 import MapDashboard from "../components/MapDashboard";
 import NavigatorDashboard from "../components/NavigatorDashboard";
 
@@ -26,11 +26,22 @@ const RescueCenterIcon = L.divIcon({
 	popupAnchor: [0, -16],
 });
 
+const ReportIcon = L.divIcon({
+	className: "custom-div-icon",
+	html: `<div style="background-color: white; border-radius: 50%; border: 2px solid #ff9800; width: 32px; height: 32px; display: flex; justify-content: center; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#ff9800" width="20" height="20"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+         </div>`,
+	iconSize: [32, 32],
+	iconAnchor: [16, 16],
+	popupAnchor: [0, -16],
+});
+
 export default function LiveDataPage({ onBack }: BackProps) {
 	const mapContainer = useRef<HTMLDivElement>(null);
 	const mapInstance = useRef<L.Map | null>(null); // To access map later
 	const floodLayerRef = useRef<L.LayerGroup | null>(null); // To store and clear flood markers
 	const rescueCenterLayerRef = useRef<L.LayerGroup | null>(null);
+	const reportsLayerRef = useRef<L.LayerGroup | null>(null);
 
 	const drawnItemsRef = useRef<L.FeatureGroup>(new L.FeatureGroup());
 	const drawControlRef = useRef<L.Control.Draw | null>(null);
@@ -41,6 +52,11 @@ export default function LiveDataPage({ onBack }: BackProps) {
 	const stateLayersRef = useRef<L.GeoJSON[]>([]);
 
 	const [rescueCenters, setRescueCenters] = useState<RescueCenter[]>([]);
+	const [reports, setReports] = useState<Report[]>([]);
+	const [showRescueCenters, setShowRescueCenters] = useState(false);
+	const [showReports, setShowReports] = useState(false);
+	const [togglesOpen, setTogglesOpen] = useState(false);
+
 	const [clickMode, setClickMode] = useState<"start" | "end" | null>(null);
 	const [isDrawing, setIsDrawing] = useState(false); // <--- Add this
 	const [isBlockActive, setIsBlockActive] = useState(false);
@@ -60,13 +76,17 @@ export default function LiveDataPage({ onBack }: BackProps) {
 		getRescueCenters()
 			.then(setRescueCenters)
 			.catch((err) => console.error("Failed to fetch rescue centers:", err));
+		
+		getReports()
+			.then(setReports)
+			.catch((err) => console.error("Failed to fetch reports:", err));
 	}, []);
 
-	// Render Rescue Centers
+	// Render Rescue Centers and Reports
 	useEffect(() => {
 		if (!isMapReady || !mapInstance.current) return;
 
-		// Initialize layer if needed
+		// --- Rescue Centers ---
 		if (!rescueCenterLayerRef.current) {
 			rescueCenterLayerRef.current = L.layerGroup();
 		} else {
@@ -98,7 +118,67 @@ export default function LiveDataPage({ onBack }: BackProps) {
 				rescueCenterLayerRef.current?.addLayer(marker);
 			}
 		});
-	}, [rescueCenters, isMapReady]);
+
+		// --- Reports ---
+		if (!reportsLayerRef.current) {
+			reportsLayerRef.current = L.layerGroup();
+		} else {
+			reportsLayerRef.current.clearLayers();
+		}
+
+		reports.forEach((report) => {
+			if (report.latitude && report.longitude) {
+				const marker = L.marker([report.latitude, report.longitude], {
+					icon: ReportIcon,
+				});
+				marker.bindPopup(`
+					<div style="min-width: 200px;">
+						<h3 style="font-weight: bold; font-size: 1.1em; margin-bottom: 5px;">${report.title}</h3>
+						<p style="margin: 0; color: #555;">${report.description}</p>
+						<hr style="margin: 8px 0; border: 0; border-top: 1px solid #eee;" />
+						<div style="font-size: 0.9em;">
+							<p style="margin: 2px 0;"><strong>Severity:</strong> ${report.severity}</p>
+							<p style="margin: 2px 0;"><strong>Status:</strong> ${report.status}</p>
+						</div>
+					</div>
+				`);
+				reportsLayerRef.current?.addLayer(marker);
+			}
+		});
+
+	}, [rescueCenters, reports, isMapReady]);
+
+	// Toggle Layers based on state
+	useEffect(() => {
+		if (!mapInstance.current) return;
+		const map = mapInstance.current;
+
+		// Rescue Centers
+		if (rescueCenterLayerRef.current) {
+			if (showRescueCenters) {
+				if (!map.hasLayer(rescueCenterLayerRef.current)) {
+					map.addLayer(rescueCenterLayerRef.current);
+				}
+			} else {
+				if (map.hasLayer(rescueCenterLayerRef.current)) {
+					map.removeLayer(rescueCenterLayerRef.current);
+				}
+			}
+		}
+
+		// Reports
+		if (reportsLayerRef.current) {
+			if (showReports) {
+				if (!map.hasLayer(reportsLayerRef.current)) {
+					map.addLayer(reportsLayerRef.current);
+				}
+			} else {
+				if (map.hasLayer(reportsLayerRef.current)) {
+					map.removeLayer(reportsLayerRef.current);
+				}
+			}
+		}
+	}, [showRescueCenters, showReports, isMapReady]);
 
 	// --- 1. Map Initialization (Preserving existing logic) ---
 	useEffect(() => {
@@ -122,27 +202,6 @@ export default function LiveDataPage({ onBack }: BackProps) {
 
 		// Create a Layer Group for future flood markers
 		floodLayerRef.current = L.layerGroup().addTo(map);
-
-        // Initialize Rescue Center Layer (but don't add to map yet)
-        rescueCenterLayerRef.current = L.layerGroup();
-
-        // Zoom Listener for Rescue Centers
-        const handleZoom = () => {
-            if (!map || !rescueCenterLayerRef.current) return;
-            // Zoom level 10 is roughly "district/city" view. 
-            // Adjust this threshold if "20km" implies a different scale.
-            if (map.getZoom() >= 10) {
-                if (!map.hasLayer(rescueCenterLayerRef.current)) {
-                    map.addLayer(rescueCenterLayerRef.current);
-                }
-            } else {
-                if (map.hasLayer(rescueCenterLayerRef.current)) {
-                    map.removeLayer(rescueCenterLayerRef.current);
-                }
-            }
-        };
-        map.on('zoomend', handleZoom);
-        handleZoom(); // Initial check
 
 		map.addLayer(drawnItemsRef.current);
 
@@ -537,6 +596,41 @@ export default function LiveDataPage({ onBack }: BackProps) {
 					</div>
 
 					<div className="flex items-center gap-4">
+						<div className="relative">
+							<button
+								onClick={() => setTogglesOpen(!togglesOpen)}
+								className={`px-4 py-2 rounded-lg transition-all text-sm font-medium border ${
+									togglesOpen
+										? "bg-blue-600 text-white border-blue-500 shadow-[0_0_15px_rgba(37,99,235,0.5)]"
+										: "bg-slate-800 text-blue-100 border-slate-700 hover:border-blue-500/50"
+								}`}
+							>
+								Toggles
+							</button>
+							{togglesOpen && (
+								<div className="absolute top-full left-0 mt-2 w-48 bg-slate-900 border border-slate-700 rounded-lg shadow-xl p-2 z-[1000]">
+									<label className="flex items-center gap-2 p-2 hover:bg-slate-800 rounded cursor-pointer text-blue-100">
+										<input
+											type="checkbox"
+											checked={showRescueCenters}
+											onChange={(e) => setShowRescueCenters(e.target.checked)}
+											className="rounded border-slate-600 bg-slate-800 text-blue-600 focus:ring-blue-500"
+										/>
+										<span className="text-sm">Rescue Centers</span>
+									</label>
+									<label className="flex items-center gap-2 p-2 hover:bg-slate-800 rounded cursor-pointer text-blue-100">
+										<input
+											type="checkbox"
+											checked={showReports}
+											onChange={(e) => setShowReports(e.target.checked)}
+											className="rounded border-slate-600 bg-slate-800 text-blue-600 focus:ring-blue-500"
+										/>
+										<span className="text-sm">Active Reports</span>
+									</label>
+								</div>
+							)}
+						</div>
+
 						<button
 							onClick={() => setDashboardOpen(!dashboardOpen)}
 							className={`px-4 py-2 rounded-lg transition-all text-sm font-medium border ${

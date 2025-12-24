@@ -7,3 +7,12 @@ body {
   background-color: black;
   color: white;
 }
+/* Ensure the background is static and doesn't move when scrolling */
+html, body, #root {
+  min-height: 100%;
+  height: 100%;
+  /* match the app gradient used in App.tsx */
+  background: linear-gradient(135deg, #0f1724 0%, #0b1220 60%, #000000 100%);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+}
