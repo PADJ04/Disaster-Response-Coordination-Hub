@@ -240,7 +240,7 @@
   let isDragging = false;
   let offset = { x: 0, y: 0 };
 
-  header.addEventListener('mousedown', (e) => {
+  header.addEventListener('mousedown', (e) => { 
     isDragging = true;
     offset.x = e.clientX - sidebar.offsetLeft;
     offset.y = e.clientY - sidebar.offsetTop;
