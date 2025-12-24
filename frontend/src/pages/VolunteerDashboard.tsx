@@ -115,7 +115,7 @@ export default function VolunteerDashboard({ onLogout }: { onLogout: () => void 
   return (
     <div className="flex-1 flex flex-col items-center justify-start px-6 md:px-12 pt-12 animate-fade-in pb-24">
       <div className="w-full max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4 md:gap-0">
           <div>
             <h1 className="text-4xl font-bold text-white mb-2">Volunteer Dashboard</h1>
             <p className="text-white/60">View assigned tasks and nearby missions</p>
@@ -146,7 +146,7 @@ export default function VolunteerDashboard({ onLogout }: { onLogout: () => void 
 
         {/* Assigned Tasks Section */}
         <div className="mb-8">
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-2 md:gap-0">
             <h2 className="text-2xl font-bold text-white">Assigned Tasks</h2>
             <div className="flex gap-2">
               <select value={filterMonth} onChange={(e) => setFilterMonth(e.target.value)} className="bg-black/40 border border-white/10 rounded-lg px-3 py-1 text-sm text-white focus:outline-none">
