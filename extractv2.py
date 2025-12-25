@@ -17,24 +17,14 @@ except Exception:
 print("Authentication successful. Starting analysis...")
 
 # =============================================================================
-# 2. SETTINGS (ADJUSTED FOR ACCURACY)
+# 2. SETTINGS
 # =============================================================================
-# DATE: Uses today automatically. 
-# To check past dates, uncomment the next line:
-now = datetime.datetime(2019, 8, 15) 
-# now = datetime.datetime.now()
+# now = datetime.datetime(2019, 8, 15) 
+now = datetime.datetime.now()
 
-# SETTING 1: STRICTER THRESHOLD (1.50)
-# 1.25 picks up muddy fields. 1.50 only picks up real flood water.
 DIFF_THRESHOLD = 1.35
-
-# SETTING 2: MINIMUM PIXEL CLUMP (25)
-# Increase this to ignore small puddles/noise.
 CONNECTED_PIXELS = 17
-
-# SETTING 3: MINIMUM AREA IN SQ KM (0.05)
-# Any flood polygon smaller than this will be deleted from the CSV.
-MIN_AREA_SQKM = 1.5
+MIN_AREA_SQKM = 1.0
 
 # Time Setup
 after_end = now
@@ -70,7 +60,6 @@ collection = ee.ImageCollection('COPERNICUS/S1_GRD') \
 before = collection.filter(ee.Filter.date(ee_before_start, ee_before_end)).mosaic().clip(geometry)
 after = collection.filter(ee.Filter.date(ee_after_start, ee_after_end)).mosaic().clip(geometry)
 
-# Gamma Map Filter
 def gamma_map(img):
     natural_img = ee.Image.constant(10).pow(img.divide(10)).rename('intensity')
     params = {'reducer': ee.Reducer.mean().combine(reducer2=ee.Reducer.variance(), sharedInputs=True),
@@ -81,13 +70,9 @@ def gamma_map(img):
     ci = variance.sqrt().divide(mean)
     cu = 1.0 / math.sqrt(5)
     cmax = math.sqrt(2) * cu
-    cu_squared = cu * cu
-    numerator = 1 + cu_squared
-    denominator = ci.multiply(ci).subtract(cu_squared)
-    alpha = ee.Image.constant(numerator).divide(denominator)
     img_filtered = natural_img.expression(
         "(ci < cu) ? mean : (ci > cmax) ? img : ((alpha - 1) * mean + sqrt((alpha - 1)**2 * mean**2 + 4 * alpha * img * mean)) / (2 * alpha)",
-        {'ci': ci, 'cu': cu, 'cmax': cmax, 'mean': mean, 'img': natural_img, 'alpha': alpha}
+        {'ci': ci, 'cu': cu, 'cmax': cmax, 'mean': mean, 'img': natural_img, 'alpha': ee.Image.constant(1 + cu*cu).divide(ci.multiply(ci).subtract(cu*cu))}
     )
     return img_filtered.log10().multiply(10)
 
@@ -95,30 +80,26 @@ print("Applying Speckle Filter...")
 before_filtered = gamma_map(before)
 after_filtered = gamma_map(after)
 
-# Flood Calculation
 difference = after_filtered.divide(before_filtered)
 flooded = difference.gt(DIFF_THRESHOLD).rename('water').selfMask()
 
-# Masks
 permanent_water = gsw.select('seasonality').gte(5).clip(geometry)
 flooded = flooded.updateMask(permanent_water.unmask(0).Not())
-
 slope = ee.Algorithms.Terrain(hydrosheds).select('slope')
 flooded = flooded.updateMask(slope.gt(5).Not())
-
 connections = flooded.connectedPixelCount(25)
 flooded = flooded.updateMask(connections.gte(CONNECTED_PIXELS))
 
 # =============================================================================
-# 4. VECTOR CONVERSION & FILTERING
+# 4. VECTOR CONVERSION (UPDATED FOR POLYGONS)
 # =============================================================================
-print("Converting to vectors (Scale=500m)...")
+print("Converting to flood polygons...")
 
 vectors = flooded.reduceToVectors(
     geometry=geometry,
     crs=flooded.projection(),
     scale=500,
-    geometryType='polygon',
+    geometryType='polygon',  # Ensures we get shapes, not points
     eightConnected=False,
     labelProperty='zone',
     reducer=ee.Reducer.countEvery(),
@@ -126,40 +107,27 @@ vectors = flooded.reduceToVectors(
     bestEffort=True
 )
 
-# FIXED FUNCTION: Defines coords properly and Filters by Area
-def process_and_filter(feature):
-    # 1. Calculate Area First
-    area = feature.geometry().area(10).divide(1e6)
-    
-    # 2. Define Coords (The step that was missing before)
-    centroid = feature.geometry().centroid(10)
-    coords = centroid.coordinates()
+# Function to add Area property and filter small zones
+def add_area_properties(feature):
+    area = feature.geometry().area(10).divide(1e6) # Sq Km
+    return feature.set({
+        'area_sqkm': area,
+        'date': after_end.strftime('%Y-%m-%d'),
+        'polygon_id': feature.id()
+    })
 
-    # 3. Logic: If Area > Min_Area, Return Feature. Else Return NULL.
-    return ee.Algorithms.If(
-        area.gt(MIN_AREA_SQKM), 
-        ee.Feature(None).set({
-            'polygon_id': feature.id(),
-            'longitude': coords.get(0),
-            'latitude': coords.get(1),
-            'area_sqkm': area,
-            'date': after_end.strftime('%Y-%m-%d')
-        }),
-        None # This drops the feature if it is too small
-    )
-
-# Map the function and drop the Nulls (the small areas)
-print("Filtering noise (removing small areas < 0.05 sqkm)...")
-flood_centroids = vectors.map(process_and_filter, dropNulls=True)
+# Add properties and then Filter
+print(f"Filtering polygons smaller than {MIN_AREA_SQKM} sqkm...")
+flood_polygons = vectors.map(add_area_properties).filter(ee.Filter.gt('area_sqkm', MIN_AREA_SQKM))
 
 # =============================================================================
-# 5. EXPORT
+# 5. EXPORT AS GEOJSON
 # =============================================================================
-out_csv = 'Karnataka_Flood_Centroids.csv'
-print("Downloading data...")
+out_file = 'Karnataka_Flood_Polygons.geojson'
+print("Downloading GeoJSON data...")
 
 try:
-    geemap.ee_to_csv(flood_centroids, filename=out_csv)
-    print(f"Success! Data saved to {out_csv}")
+    geemap.ee_to_geojson(flood_polygons, filename=out_file)
+    print(f"Success! Data saved to {out_file}")
 except Exception as e:
     print(f"Error: {e}")
