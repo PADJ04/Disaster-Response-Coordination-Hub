@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // Puppeteer for Stealth Google Search
 import puppeteer from "puppeteer-extra";
@@ -9,6 +10,7 @@ import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import * as cheerio from "cheerio";
 
 dotenv.config();
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 puppeteer.use(StealthPlugin());
 
 const app = express();
@@ -95,7 +97,7 @@ async function scrapeGoogleNews(query) {
 		const links = [];
 		$('a[href^="http"]').each((i, el) => {
 			const href = $(el).attr("href");
-			if (href && !href.includes("google.com") && links.length < 3)
+			if (href && !href.includes("google.com") && links.length < 5)
 				links.push(href);
 		});
 
@@ -133,11 +135,82 @@ async function scrapeGoogleNews(query) {
 	return combinedText;
 }
 
+// --- 🛑 STRICT GATEKEEPER FUNCTION ---
+async function gatekeeperCheck(district, state, date) {
+	console.log(
+		`🔒 Gatekeeper: Auditing ${district} for active floods around ${date}...`
+	);
+
+	const model = genAI.getGenerativeModel({
+		model: "gemini-2.5-flash",
+		tools: [{ googleSearch: {} }],
+	});
+
+	const prompt = `
+    ACT AS: A Strict Disaster Response Auditor.
+    OBJECTIVE: Verify if there is an **ACTIVE, ONGOING** flood event in ${district} District, ${state}, India.
+    TIMEFRAME: Check news from 2 days before ${date} to 1 day after ${date}.
+
+    ------------------------------------------
+    🛑 "FALSE POSITIVE" TRAPS (RETURN "NO"):
+    1. FINANCIAL NEWS: Articles about "compensation", "relief funds released", "crop insurance claims", or "government grants" for *past* floods.
+    2. WEATHER FORECASTS: Articles saying "Yellow Alert", "Orange Alert", "Heavy rain predicted", "likely to occur", or "schools closed as precaution" (without actual flooding).
+    3. INFRASTRUCTURE PLANS: Articles about "building new drains", "flood control meetings", or "repairing bridges".
+    4. MINOR RAIN: Articles describing "pleasant weather", "light showers", or "drizzles".
+
+    ✅ "TRUE POSITIVE" TRIGGERS (RETURN "YES"):
+    1. PHYSICAL IMPACT: Reports of "water entering homes", "villages marooned", "bridge submerged", "road disconnected", "crop loss due to inundation".
+    2. HUMAN IMPACT: "people evacuated", "relief camps opened", "NDRF team deployed", "rescue operations".
+    3. GEOGRAPHIC SPECIFICITY: The article must specifically mention locations INSIDE ${district}.
+    ------------------------------------------
+
+    INSTRUCTIONS:
+    1. Search Google News for keywords: "flood situation ${district}", "villages submerged ${district}", "river overflow ${district} ${date}".
+    2. Analyze the search snippets.
+    3. IF you find evidence matching the "TRUE POSITIVE" list, return "YES".
+    4. IF you only find "FALSE POSITIVE" traps (even if the word 'flood' is used), return "NO".
+
+    OUTPUT FORMAT:
+    Return ONLY the word "YES" or "NO". Do not add punctuation.
+    `;
+
+	try {
+		const result = await model.generateContent(prompt);
+		const response = await result.response;
+		const text = response.text().trim().toUpperCase();
+
+		// 🧹 DOUBLE CLEANING: Remove any accidental periods or spaces
+		const verdict = text.replace(/[^A-Z]/g, "");
+
+		console.log(`🔒 Gatekeeper Audit Verdict: ${verdict}`);
+
+		// Only allow explicit "YES". Everything else (maybe, unclear, etc.) is a NO.
+		return verdict === "YES";
+	} catch (error) {
+		console.error("Gatekeeper Error:", error);
+		// Safety: If the check fails completely, we default to TRUE to let the scraper try.
+		return false;
+	}
+}
+
 // --- MAIN ROUTE ---
 app.post("/api/floods", async (req, res) => {
 	try {
 		const { state, district, date } = req.body;
 		console.log(`\n🌊 ANALYZING: ${district} (${date})...`);
+
+		const isFlooded = await gatekeeperCheck(district, state, date);
+
+		if (!isFlooded) {
+			// If Gemini says NO, we stop here.
+			console.log("🛑 Gatekeeper says NO. Stopping.");
+			return res.json({
+				success: false,
+				message: `No flood events detected in ${district} around ${date}.`,
+			});
+		}
+
+		console.log("✅ Gatekeeper approved. Proceeding to scrape...");
 
 		// 1. Scrape News
 		const searchQuery = `villages submerged in ${district} district ${state} flood ${date} list`;

@@ -29,6 +29,7 @@ export default function MapDashboard({
 	});
 	const [loading, setLoading] = useState(false);
 	const [searchResults, setSearchResults] = useState<FloodEvent[]>([]);
+	const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
 	// --- Refs for Smooth Interaction ---
 	const dashboardRef = useRef<HTMLDivElement>(null);
@@ -154,7 +155,8 @@ export default function MapDashboard({
 			return;
 		}
 		setLoading(true);
-		setSearchResults([]); // Clear previous
+		setSearchResults([]);
+		setStatusMessage(null);
 		try {
 			// CONNECTING TO YOUR SERVER HERE
 			const response = await fetch("http://localhost:5000/api/floods", {
@@ -170,6 +172,11 @@ export default function MapDashboard({
 				if (onFloodDataReceived) {
 					onFloodDataReceived(result.data); // Send to Parent Map
 				}
+			} else if (!result.success) {
+				// 🟢 CAPTURE THE "NO FLOOD" MESSAGE
+				setStatusMessage(result.message || "No flood data found.");
+				// Optional: Clear pins on the map if you want
+				if (onFloodDataReceived) onFloodDataReceived([]);
 			}
 		} catch (error) {
 			console.error("Error fetching flood data:", error);
@@ -341,9 +348,42 @@ export default function MapDashboard({
 
 					{/* RESULTS LIST */}
 					<div className="space-y-3 pb-4">
-						{searchResults.length === 0 && !loading && (
-							<div className="text-center py-8 text-blue-200/30 text-xs italic">
-								Ready to analyze. Enter details above.
+						{/* 🟢 CONDITIONAL UI LOGIC */}
+						{!loading && searchResults.length === 0 && (
+							<div className="flex flex-col items-center justify-center py-8 px-4 text-center">
+								{/* CASE 1: SERVER SAID "NO FLOOD" */}
+								{statusMessage ? (
+									<div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-4 w-full animate-in fade-in zoom-in-95 duration-300">
+										<div className="w-10 h-10 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-2">
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												width="20"
+												height="20"
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												strokeWidth="2"
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												className="text-emerald-400"
+											>
+												<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+												<path d="m9 12 2 2 4-4" />
+											</svg>
+										</div>
+										<h4 className="text-emerald-200 font-medium text-sm mb-1">
+											No Impact Detected
+										</h4>
+										<p className="text-emerald-200/60 text-xs leading-relaxed">
+											{statusMessage}
+										</p>
+									</div>
+								) : (
+									/* CASE 2: INITIAL STATE (USER HASN'T SEARCHED YET) */
+									<div className="text-blue-200/30 text-xs italic">
+										Ready to analyze. Enter details above.
+									</div>
+								)}
 							</div>
 						)}
 

@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@types/react-leaflet": "^2.8.3",
     "axios": "^1.13.2",
     "cheerio": "^1.1.2",

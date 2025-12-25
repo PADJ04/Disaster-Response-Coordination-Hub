@@ -21,16 +21,16 @@ print("Authentication successful. Starting analysis...")
 # =============================================================================
 # DATE: Uses today automatically. 
 # To check past dates, uncomment the next line:
-# now = datetime.datetime(2023, 10, 15) 
-now = datetime.datetime.now()
+now = datetime.datetime(2019, 8, 15) 
+# now = datetime.datetime.now()
 
 # SETTING 1: STRICTER THRESHOLD (1.50)
 # 1.25 picks up muddy fields. 1.50 only picks up real flood water.
-DIFF_THRESHOLD = 1.50 
+DIFF_THRESHOLD = 1.35 
 
 # SETTING 2: MINIMUM PIXEL CLUMP (25)
 # Increase this to ignore small puddles/noise.
-CONNECTED_PIXELS = 25 
+CONNECTED_PIXELS = 17
 
 # SETTING 3: MINIMUM AREA IN SQ KM (0.05)
 # Any flood polygon smaller than this will be deleted from the CSV.
