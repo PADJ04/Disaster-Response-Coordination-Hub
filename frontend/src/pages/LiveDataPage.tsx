@@ -60,6 +60,7 @@ export default function LiveDataPage({ onBack }: BackProps) {
 	const [clickMode, setClickMode] = useState<"start" | "end" | null>(null);
 	const [isDrawing, setIsDrawing] = useState(false);
 	const [zones, setZones] = useState<Zone[]>([]);
+	const [floodEvents, setFloodEvents] = useState<any[]>([]);
 	const [routeResult, setRouteResult] = useState<{
 		dist: string;
 		time: string;
@@ -188,6 +189,7 @@ export default function LiveDataPage({ onBack }: BackProps) {
 		const map = L.map(mapContainer.current, {
 			maxBoundsViscosity: 1.0,
 			minZoom: 5,
+			scrollWheelZoom: false,
 		}).setView([18, 80], 4);
 
 		mapInstance.current = map; // Save instance
@@ -326,7 +328,6 @@ export default function LiveDataPage({ onBack }: BackProps) {
 		};
 	}, [clickMode]); // <--- Dependent on clickMode
 
-
 	// --- NEW EFFECT: Manage Layer Interactions ---
 	// If we are drawing or setting points, make State Layers "unclickable"
 	// so clicks pass through to the map/draw tool.
@@ -367,6 +368,9 @@ export default function LiveDataPage({ onBack }: BackProps) {
 	// --- 2. Handle New Data from Dashboard ---
 	const handleFloodData = (events: any[]) => {
 		if (!mapInstance.current || !floodLayerRef.current) return;
+
+		// Update the flood event state
+		setFloodEvents(events);
 
 		// Clear previous flood markers
 		floodLayerRef.current.clearLayers();
@@ -416,6 +420,76 @@ export default function LiveDataPage({ onBack }: BackProps) {
 		);
 	};
 
+	// Helper: Create a 500m Square Polygon around a point
+	const createBufferPolygon = (lat: number, lng: number) => {
+		// Approx 500m in degrees (0.0045 deg is roughly 500m)
+		const d = 0.0045;
+
+		// Create 4 corners of a square
+		return [
+			[lat + d, lng - d], // Top-Left
+			[lat + d, lng + d], // Top-Right
+			[lat - d, lng + d], // Bottom-Right
+			[lat - d, lng - d], // Bottom-Left
+		];
+	};
+
+	const handleAutoAvoidToggle = (active: boolean) => {
+		// 1. If Turning OFF: Clean up auto-zones
+		if (!active) {
+			// Find all auto zones
+			const autoZones = zones.filter((z) => z.isAuto);
+
+			// Remove from Leaflet Map
+			autoZones.forEach((z) => {
+				const layer = drawnItemsRef.current.getLayer(z.id);
+				if (layer) drawnItemsRef.current.removeLayer(layer);
+			});
+
+			// Remove from React State
+			setZones((prev) => prev.filter((z) => !z.isAuto));
+			return;
+		}
+
+		// 2. If Turning ON: Generate zones from Flood Data
+		if (floodEvents.length === 0) {
+			alert("No live flood data available to avoid.");
+			return;
+		}
+
+		const newZones: Zone[] = [];
+
+		floodEvents.forEach((event) => {
+			const { lat, lng } = event.coordinates;
+
+			// Generate Square Coordinates
+			const coords = createBufferPolygon(lat, lng);
+
+			// Create Leaflet Polygon
+			const poly = L.polygon(coords as any, {
+				color: "#ff9800", // Orange color to differentiate
+				fillOpacity: 0.3,
+				weight: 2,
+				dashArray: "5, 5", // Dashed line style
+			});
+
+			// Add to Map Layer
+			drawnItemsRef.current.addLayer(poly);
+			const layerId = L.Util.stamp(poly);
+
+			// Add to List
+			newZones.push({
+				id: layerId,
+				name: `Auto-Avoid: ${event.location_name || "Flood Zone"}`,
+				isBlocked: true, // Block by default
+				isAuto: true, // Mark as auto-generated
+			});
+		});
+
+		// Update React State
+		setZones((prev) => [...prev, ...newZones]);
+	};
+
 	// --- ROUTING ACTIONS ---
 
 	// 1. Toggle Drawing Mode
@@ -446,7 +520,6 @@ export default function LiveDataPage({ onBack }: BackProps) {
 			map.doubleClickZoom.enable();
 		}
 	};
-
 
 	const handleToggleZone = (id: number) => {
 		// Update State
@@ -768,17 +841,13 @@ export default function LiveDataPage({ onBack }: BackProps) {
 						onCalculate={handleCalculate}
 						onReset={handleReset}
 						onProfileChange={setProfile}
-						onAutoAvoidToggle={(active) => {
-							console.log("Auto-avoid logic would go here", active);
-							// Future: Iterate floodLayerRef, get GeoJSONs, add to custom_model
-						}}
+						onAutoAvoidToggle={handleAutoAvoidToggle}
 					/>
 				)}
 
 				<div
 					ref={mapContainer}
-					className="w-full h-full"
-					style={{ height: "100%" }}
+					className="relative w-full h-screen"
 				/>
 			</div>
 		</div>

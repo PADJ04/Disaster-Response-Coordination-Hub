@@ -4,6 +4,7 @@ export type Zone = {
 	id: number;
 	name: string;
 	isBlocked: boolean;
+	isAuto?: boolean;
 };
 
 interface NavigatorDashboardProps {

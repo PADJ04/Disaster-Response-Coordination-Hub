@@ -49,7 +49,7 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className={`relative z-10 flex flex-col ${location.pathname === '/live-data' ? 'h-screen p-0' : 'pt-20 pb-32 min-h-screen'}` }>
+      <main className={`relative z-10 flex flex-col ${location.pathname === '/live-data' ? 'min-h-screen p-0' : 'pt-20 pb-32 min-h-screen'}` }>
         <Routes>
           <Route path="/" element={<HomePage onNavigate={handleNavigate} />} />
           <Route path="/login" element={
