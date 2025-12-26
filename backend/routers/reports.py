@@ -66,6 +66,37 @@ async def create_report(
 def get_reports(db: Session = Depends(get_db)):
     return db.query(models.Report).all()
 
+
+@router.patch("/{report_id}", response_model=schemas.ReportResponse)
+def update_report(report_id: str, report_update: schemas.ReportUpdate, db: Session = Depends(get_db)):
+    report = db.query(models.Report).filter(models.Report.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    if report_update.status is not None:
+        report.status = report_update.status
+        
+    db.commit()
+    db.refresh(report)
+    return report
+
+@router.get("/zones")
+def get_zones(db: Session = Depends(get_db)):
+    """Return a summary of zones and the reports in each zone."""
+    reports = db.query(models.Report).filter(models.Report.zone != None).all()
+    zones = {}
+    for r in reports:
+        zones.setdefault(r.zone, []).append({
+            "id": r.id,
+            "title": r.title,
+            "severity": r.severity,
+            "created_at": r.created_at,
+            "status": r.status,
+            "latitude": r.latitude,
+            "longitude": r.longitude,
+        })
+    return zones
+
 @router.delete("/{report_id}")
 def delete_report(report_id: str, db: Session = Depends(get_db)):
     report = db.query(models.Report).filter(models.Report.id == report_id).first()

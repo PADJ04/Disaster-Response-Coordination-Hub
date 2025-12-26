@@ -32,6 +32,7 @@ class Report(Base):
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
     status = Column(String, default="new") # new, in-progress, resolved
+    zone = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     user_id = Column(String, ForeignKey("users.id"))
 
@@ -65,9 +66,13 @@ class Task(Base):
     id = Column(String, primary_key=True, default=generate_uuid)
     title = Column(String, nullable=False)
     description = Column(String, nullable=False)
-    status = Column(String, default="assigned") # assigned, accepted, rejected, completed
+    status = Column(String, default="assigned") # assigned, accepted, rejected, completed, verified
     priority = Column(String, default="medium") # low, medium, high
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    zone = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
     
     volunteer_id = Column(String, ForeignKey("users.id"))
     report_id = Column(String, ForeignKey("reports.id"), nullable=True)

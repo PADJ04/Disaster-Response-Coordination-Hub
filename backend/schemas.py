@@ -31,9 +31,14 @@ class ReportBase(BaseModel):
     severity: str
     latitude: float
     longitude: float
+    zone: Optional[str] = None
 
 class ReportCreate(ReportBase):
     pass
+
+class ReportUpdate(BaseModel):
+    zone: Optional[str] = None
+    status: Optional[str] = None
 
 class ReportImageResponse(BaseModel):
     id: str
@@ -76,6 +81,8 @@ class TaskBase(BaseModel):
     priority: str = "medium"
     volunteer_id: str
     report_id: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 class TaskCreate(TaskBase):
     pass
@@ -87,6 +94,7 @@ class TaskResponse(TaskBase):
     id: str
     status: str
     created_at: datetime
+    completed_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
