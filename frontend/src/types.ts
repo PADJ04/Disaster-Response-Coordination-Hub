@@ -46,11 +46,15 @@ export interface Task {
 		| "accepted"
 		| "rejected"
 		| "completed"
-		| "pending_verification";
+		| "pending_verification"
+		| "verified";
 	priority: "low" | "medium" | "high";
 	volunteer_id: string;
 	report_id?: string;
 	created_at: string;
+	completed_at?: string;
+	latitude?: number;
+	longitude?: number;
 }
 
 export interface Report {
@@ -63,6 +67,7 @@ export interface Report {
 	status: string;
 	created_at: string;
 	images: { id: string; image_url: string }[];
+	zone?: string;
 }
 
 export interface RescueCenter {

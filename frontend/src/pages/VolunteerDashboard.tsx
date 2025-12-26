@@ -31,7 +31,7 @@ export default function VolunteerDashboard({ onLogout }: { onLogout: () => void 
   const [isMapModalOpen, setIsMapModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [selectedTaskLocation, setSelectedTaskLocation] = useState<{lat: number, lng: number} | null>(null);
-  const [taskStatus, setTaskStatus] = useState<'assigned' | 'accepted' | 'rejected' | 'completed' | 'pending_verification'>('assigned');
+  const [taskStatus, setTaskStatus] = useState<'assigned' | 'accepted' | 'rejected' | 'completed' | 'pending_verification' | 'verified'>('assigned');
 
   const [filterMonth, setFilterMonth] = useState<string>('');
   const [filterYear, setFilterYear] = useState<string>('');
@@ -75,14 +75,22 @@ export default function VolunteerDashboard({ onLogout }: { onLogout: () => void 
     setIsTaskModalOpen(true);
   };
 
-  const handleViewLocation = (reportId?: string) => {
-    if (!reportId) return;
-    const report = reports.find(r => r.id === reportId);
-    if (report) {
-      setSelectedTaskLocation({ lat: report.latitude, lng: report.longitude });
-      setIsMapModalOpen(true);
+  const handleViewLocation = (task: Task) => {
+    if (task.latitude && task.longitude) {
+        setSelectedTaskLocation({ lat: task.latitude, lng: task.longitude });
+        setIsMapModalOpen(true);
+        return;
+    }
+    if (task.report_id) {
+        const report = reports.find(r => r.id === task.report_id);
+        if (report) {
+            setSelectedTaskLocation({ lat: report.latitude, lng: report.longitude });
+            setIsMapModalOpen(true);
+        } else {
+            alert("Report location not found");
+        }
     } else {
-        alert("Report location not found");
+        alert("No location data for this task");
     }
   };
 
@@ -106,8 +114,8 @@ export default function VolunteerDashboard({ onLogout }: { onLogout: () => void 
       case 'assigned': return 'bg-blue-500/20 text-blue-300 border-blue-500/30';
       case 'accepted': return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30';
       case 'rejected': return 'bg-red-500/20 text-red-300 border-red-500/30';
-      case 'completed': return 'bg-green-500/20 text-green-300 border-green-500/30';
-      case 'pending_verification': return 'bg-orange-500/20 text-orange-300 border-orange-500/30';
+      case 'completed': return 'bg-orange-500/20 text-orange-300 border-orange-500/30';
+      case 'verified': return 'bg-green-500/20 text-green-300 border-green-500/30';
       default: return 'bg-white/10 text-white/70';
     }
   };
@@ -133,7 +141,7 @@ export default function VolunteerDashboard({ onLogout }: { onLogout: () => void 
             <div className="mt-4 flex gap-2 text-xs">
               <span className="px-2 py-1 bg-blue-500/20 text-blue-300 rounded">{tasks.filter(t => t.status === 'assigned').length} Assigned</span>
               <span className="px-2 py-1 bg-yellow-500/20 text-yellow-300 rounded">{tasks.filter(t => t.status === 'accepted').length} Accepted</span>
-              <span className="px-2 py-1 bg-green-500/20 text-green-300 rounded">{tasks.filter(t => t.status === 'completed').length} Completed</span>
+              <span className="px-2 py-1 bg-green-500/20 text-green-300 rounded">{tasks.filter(t => t.status === 'completed' || t.status === 'verified').length} Completed</span>
             </div>
           </div>
 
@@ -187,7 +195,7 @@ export default function VolunteerDashboard({ onLogout }: { onLogout: () => void 
                     </button>
                   </div>
                   <div className="mt-2">
-                     <button onClick={() => handleViewLocation(task.report_id)} className="text-xs px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full border border-blue-500/30 flex items-center gap-1 hover:bg-blue-500/30 transition">
+                     <button onClick={() => handleViewLocation(task)} className="text-xs px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full border border-blue-500/30 flex items-center gap-1 hover:bg-blue-500/30 transition">
                        <MapPin className="w-3 h-3" /> View Location
                      </button>
                   </div>
@@ -226,7 +234,7 @@ export default function VolunteerDashboard({ onLogout }: { onLogout: () => void 
                     </button>
                   </div>
                   <div className="mt-2">
-                     <button onClick={() => handleViewLocation(task.report_id)} className="text-xs px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full border border-blue-500/30 flex items-center gap-1 hover:bg-blue-500/30 transition">
+                     <button onClick={() => handleViewLocation(task)} className="text-xs px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full border border-blue-500/30 flex items-center gap-1 hover:bg-blue-500/30 transition">
                        <MapPin className="w-3 h-3" /> View Location
                      </button>
                   </div>
@@ -240,10 +248,10 @@ export default function VolunteerDashboard({ onLogout }: { onLogout: () => void 
         <div className="mt-8">
           <h2 className="text-2xl font-bold text-white mb-4">Completed Tasks</h2>
           <div className="space-y-3">
-            {tasks.filter(t => t.status === 'completed').length === 0 ? (
+            {tasks.filter(t => t.status === 'completed' || t.status === 'verified').length === 0 ? (
               <div className="p-6 text-center text-white/60 bg-white/5 border border-white/10 rounded-lg">No completed tasks</div>
             ) : (
-              tasks.filter(t => t.status === 'completed').map((task) => (
+              tasks.filter(t => t.status === 'completed' || t.status === 'verified').map((task) => (
                 <div key={task.id} className="p-4 bg-black/40 border border-green-500/20 rounded-lg hover:border-green-500/40 transition">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -255,11 +263,44 @@ export default function VolunteerDashboard({ onLogout }: { onLogout: () => void 
                       </div>
                       <p className="text-sm text-white/70 mb-3">{task.description}</p>
                       <div className="flex items-center gap-2">
-                         <button onClick={() => handleViewLocation(task.report_id)} className="text-xs px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full border border-blue-500/30 flex items-center gap-1 hover:bg-blue-500/30 transition">
+                         <button onClick={() => handleViewLocation(task)} className="text-xs px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full border border-blue-500/30 flex items-center gap-1 hover:bg-blue-500/30 transition">
                            <MapPin className="w-3 h-3" /> View Location
                          </button>
                       </div>
                     </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+        {/* Rejected Tasks Section */}
+        <div className="mt-8">
+          <h2 className="text-2xl font-bold text-white mb-4">Rejected Tasks</h2>
+          <div className="space-y-3">
+            {tasks.filter(t => t.status === 'rejected').length === 0 ? (
+              <div className="p-6 text-center text-white/60 bg-white/5 border border-white/10 rounded-lg">No rejected tasks</div>
+            ) : (
+              tasks.filter(t => t.status === 'rejected').map((task) => (
+                <div key={task.id} className="p-4 bg-black/40 border border-red-500/20 rounded-lg hover:border-red-500/40 transition">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="font-bold text-white text-lg">{task.title}</h3>
+                        <span className={`text-xs px-3 py-1 rounded-full border font-medium ${getStatusColor(task.status)}`}>
+                          {task.status}
+                        </span>
+                      </div>
+                      <p className="text-sm text-white/70 mb-3">{task.description}</p>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => handleViewLocation(task)} className="text-xs px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full border border-blue-500/30 flex items-center gap-1 hover:bg-blue-500/30 transition">
+                          <MapPin className="w-3 h-3" /> View Location
+                        </button>
+                      </div>
+                    </div>
+                    <button onClick={() => openTaskModal(task)} className="p-2 bg-red-500/20 border border-red-500/30 rounded-lg text-red-300 hover:bg-red-500/30 transition">
+                      <Edit2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               ))
@@ -323,8 +364,7 @@ export default function VolunteerDashboard({ onLogout }: { onLogout: () => void 
               <option value="assigned">Assigned</option>
               <option value="accepted">Accepted</option>
               <option value="rejected">Rejected</option>
-              <option value="pending_verification">Request Verification</option>
-              <option value="completed">Completed</option>
+              <option value="completed">Mark as Done (Request Verification)</option>
             </select>
           </div>
 

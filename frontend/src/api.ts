@@ -25,6 +25,13 @@ export const createTask = async (task: any, token: string) => {
   return response.data;
 };
 
+export const deleteTask = async (taskId: string, token: string) => {
+  const response = await api.delete(`/tasks/${taskId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return response.data;
+};
+
 export const getRescueCenters = async () => {
   const response = await api.get('/resources/rescue-centers/');
   return response.data;
@@ -32,6 +39,13 @@ export const getRescueCenters = async () => {
 
 export const getReports = async () => {
   const response = await api.get('/reports/');
+  return response.data;
+};
+
+export const updateReport = async (reportId: string, data: any, token: string) => {
+  const response = await api.patch(`/reports/${reportId}`, data, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   return response.data;
 };
 
