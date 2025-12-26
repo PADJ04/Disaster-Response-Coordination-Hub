@@ -189,7 +189,7 @@ export default function LiveDataPage({ onBack }: BackProps) {
 		const map = L.map(mapContainer.current, {
 			maxBoundsViscosity: 1.0,
 			minZoom: 5,
-			scrollWheelZoom: false,
+			// scrollWheelZoom: false,
 		}).setView([18, 80], 4);
 
 		mapInstance.current = map; // Save instance
