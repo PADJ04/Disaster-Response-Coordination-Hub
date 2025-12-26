@@ -8,6 +8,7 @@ import type { BackProps, RescueCenter, Report } from "../types";
 import { getRescueCenters, getReports } from "../api";
 import MapDashboard from "../components/MapDashboard";
 import NavigatorDashboard from "../components/NavigatorDashboard";
+import type { Zone } from "../components/NavigatorDashboard";
 
 // Fix Leaflet Default Icon
 const DefaultIcon = L.icon({
@@ -44,12 +45,11 @@ export default function LiveDataPage({ onBack }: BackProps) {
 	const reportsLayerRef = useRef<L.LayerGroup | null>(null);
 
 	const drawnItemsRef = useRef<L.FeatureGroup>(new L.FeatureGroup());
-	const drawControlRef = useRef<L.Control.Draw | null>(null);
 	const startMarkerRef = useRef<L.Marker | null>(null);
 	const endMarkerRef = useRef<L.Marker | null>(null);
 	const routeLineRef = useRef<L.Polyline | null>(null);
-	const blockPolygonRef = useRef<L.Polygon | null>(null);
 	const stateLayersRef = useRef<L.GeoJSON[]>([]);
+	const polygonDrawerRef = useRef<L.Draw.Polygon | null>(null);
 
 	const [rescueCenters, setRescueCenters] = useState<RescueCenter[]>([]);
 	const [reports, setReports] = useState<Report[]>([]);
@@ -58,14 +58,14 @@ export default function LiveDataPage({ onBack }: BackProps) {
 	const [togglesOpen, setTogglesOpen] = useState(false);
 
 	const [clickMode, setClickMode] = useState<"start" | "end" | null>(null);
-	const [isDrawing, setIsDrawing] = useState(false); // <--- Add this
-	const [isBlockActive, setIsBlockActive] = useState(false);
+	const [isDrawing, setIsDrawing] = useState(false);
+	const [zones, setZones] = useState<Zone[]>([]);
 	const [routeResult, setRouteResult] = useState<{
 		dist: string;
 		time: string;
 	} | null>(null);
 	const [profile, setProfile] = useState("car");
-    const [isMapReady, setIsMapReady] = useState(false);
+	const [isMapReady, setIsMapReady] = useState(false);
 
 	const [infoVisible, setInfoVisible] = useState(true);
 	const [dashboardOpen, setDashboardOpen] = useState(false);
@@ -76,7 +76,7 @@ export default function LiveDataPage({ onBack }: BackProps) {
 		getRescueCenters()
 			.then(setRescueCenters)
 			.catch((err) => console.error("Failed to fetch rescue centers:", err));
-		
+
 		getReports()
 			.then(setReports)
 			.catch((err) => console.error("Failed to fetch reports:", err));
@@ -145,7 +145,6 @@ export default function LiveDataPage({ onBack }: BackProps) {
 				reportsLayerRef.current?.addLayer(marker);
 			}
 		});
-
 	}, [rescueCenters, reports, isMapReady]);
 
 	// Toggle Layers based on state
@@ -183,7 +182,7 @@ export default function LiveDataPage({ onBack }: BackProps) {
 	// --- 1. Map Initialization (Preserving existing logic) ---
 	useEffect(() => {
 		if (!mapContainer.current) return;
-        if (mapInstance.current) return;
+		if (mapInstance.current) return;
 
 		// Create Map
 		const map = L.map(mapContainer.current, {
@@ -205,31 +204,33 @@ export default function LiveDataPage({ onBack }: BackProps) {
 
 		map.addLayer(drawnItemsRef.current);
 
-		const drawControl = new L.Control.Draw({
-			draw: {
-				polygon: { allowIntersection: false, showArea: true },
-				polyline: false,
-				rectangle: false,
-				circle: false,
-				marker: false,
-				circlemarker: false,
-			},
-			edit: { featureGroup: drawnItemsRef.current },
-		});
-		drawControlRef.current = drawControl;
-        map.addControl(drawControl); // Ensure control is added
-
-		// 3. Event: When a Polygon is drawn
 		map.on(L.Draw.Event.CREATED, (e: any) => {
 			const layer = e.layer;
-			drawnItemsRef.current.clearLayers(); // Only 1 zone allowed
-			drawnItemsRef.current.addLayer(layer);
-			blockPolygonRef.current = layer;
 
-			// Default "Danger" color
-			layer.setStyle({ color: "#d32f2f", fillOpacity: 0.2 });
+			// Add to Leaflet LayerGroup
+			drawnItemsRef.current.addLayer(layer);
+
+			// Generate a unique ID (Leaflet assigns _leaflet_id internally)
+			const layerId = L.Util.stamp(layer);
+
+			// Default Style (Blue/Passable)
+			layer.setStyle({ color: "#3388ff", fillOpacity: 0.2 });
+
+			// Update React State
+			setZones((prev) => [
+				...prev,
+				{ id: layerId, name: `Zone ${prev.length + 1}`, isBlocked: true }, // Default to blocked? Or false. Let's say True for convenience.
+			]);
+
+			// If default isBlocked: true, set style to Red immediately
+			layer.setStyle({ color: "#d32f2f", fillOpacity: 0.4 });
 
 			setIsDrawing(false);
+			if (polygonDrawerRef.current) {
+				polygonDrawerRef.current.disable();
+				polygonDrawerRef.current = null;
+			}
+			map.doubleClickZoom.enable();
 		});
 
 		// Load State Polygons (Your existing code untouched logic-wise)
@@ -265,7 +266,7 @@ export default function LiveDataPage({ onBack }: BackProps) {
 			fetch(st.file)
 				.then((res) => res.json())
 				.then((geo) => {
-                    if (!mapInstance.current) return; // Check if map still exists
+					if (!mapInstance.current) return; // Check if map still exists
 					const layer = L.geoJSON(geo, {
 						style: { color: st.color, weight: 2, fillOpacity: 0.15 },
 						onEachFeature: (_, layer) => {
@@ -279,15 +280,15 @@ export default function LiveDataPage({ onBack }: BackProps) {
 				.catch((err) => console.error("Error loading:", st.file, err));
 		});
 
-        setIsMapReady(true);
+		setIsMapReady(true);
 
 		return () => {
-            setIsMapReady(false);
+			setIsMapReady(false);
 			map.remove();
-            mapInstance.current = null;
-            floodLayerRef.current = null;
-            rescueCenterLayerRef.current = null;
-            stateLayersRef.current = [];
+			mapInstance.current = null;
+			floodLayerRef.current = null;
+			rescueCenterLayerRef.current = null;
+			stateLayersRef.current = [];
 		};
 	}, []);
 
@@ -324,6 +325,7 @@ export default function LiveDataPage({ onBack }: BackProps) {
 			map.off("click", handleClick);
 		};
 	}, [clickMode]); // <--- Dependent on clickMode
+
 
 	// --- NEW EFFECT: Manage Layer Interactions ---
 	// If we are drawing or setting points, make State Layers "unclickable"
@@ -418,37 +420,80 @@ export default function LiveDataPage({ onBack }: BackProps) {
 
 	// 1. Toggle Drawing Mode
 	const handleDrawToggle = (active: boolean) => {
-		if (!mapInstance.current || !drawControlRef.current) return;
+		if (!mapInstance.current) return;
+		const map = mapInstance.current;
 
-		setIsDrawing(active); // <--- This triggers the Effect above
+		setIsDrawing(active);
 
 		if (active) {
-			new L.Draw.Polygon(
-				mapInstance.current as any,
-				(drawControlRef.current.options as any).draw.polygon
-			).enable();
+			// 1. Disable map double-click zoom so it doesn't interfere with drawing
+			map.doubleClickZoom.disable();
+
+			// 2. Create tool and SAVE to ref
+			const drawer = new L.Draw.Polygon(map as any, {
+				allowIntersection: false,
+				showArea: true,
+			});
+
+			drawer.enable();
+			polygonDrawerRef.current = drawer;
 		} else {
-			// Optional: If you want to allow cancelling via button
-			// But usually Draw handles its own disable
+			// 3. Disable the specific instance we saved
+			if (polygonDrawerRef.current) {
+				polygonDrawerRef.current.disable();
+				polygonDrawerRef.current = null;
+			}
+			map.doubleClickZoom.enable();
 		}
 	};
 
-	// 2. Toggle Hazard Block (Red <-> Green)
-	const handleBlockToggle = (active: boolean) => {
-		setIsBlockActive(active);
-		if (blockPolygonRef.current) {
-			blockPolygonRef.current.setStyle({
-				color: active ? "#2e7d32" : "#d32f2f", // Green if active, Red if danger
-				fillOpacity: active ? 0.4 : 0.2,
+
+	const handleToggleZone = (id: number) => {
+		// Update State
+		setZones((prev) =>
+			prev.map((z) => {
+				if (z.id === id) return { ...z, isBlocked: !z.isBlocked };
+				return z;
+			})
+		);
+
+		// Update Leaflet Visuals
+		const layer = drawnItemsRef.current.getLayer(id);
+		if (layer) {
+			// We need to check the *new* state.
+			// Since setState is async, we look at the 'zones' logic inverted,
+			// OR simpler: just find the zone in current state and flip logic here.
+			const currentZone = zones.find((z) => z.id === id);
+			const willBlock = !currentZone?.isBlocked;
+
+			(layer as L.Path).setStyle({
+				color: willBlock ? "#d32f2f" : "#3388ff",
+				fillOpacity: willBlock ? 0.4 : 0.2,
 			});
 		}
 	};
 
-	// 3. Clear Hazard Zone
+	const handleDeleteZone = (id: number) => {
+		// Remove from Leaflet
+		const layer = drawnItemsRef.current.getLayer(id);
+		if (layer) {
+			drawnItemsRef.current.removeLayer(layer);
+		}
+		// Remove from State
+		setZones((prev) => prev.filter((z) => z.id !== id));
+	};
+
+	const handleBlockAll = () => {
+		setZones((prev) => prev.map((z) => ({ ...z, isBlocked: true })));
+		drawnItemsRef.current.eachLayer((layer: any) => {
+			layer.setStyle({ color: "#d32f2f", fillOpacity: 0.4 });
+		});
+	};
+
+	// 4. Clear All (Update existing handleClearZone)
 	const handleClearZone = () => {
 		drawnItemsRef.current.clearLayers();
-		blockPolygonRef.current = null;
-		setIsBlockActive(false);
+		setZones([]); // Clear state
 	};
 
 	// 4. Calculate Route (API Call)
@@ -469,35 +514,47 @@ export default function LiveDataPage({ onBack }: BackProps) {
 				[e.lng, e.lat],
 			],
 			points_encoded: false,
-			"ch.disable": true, // Important for custom models
+			"ch.disable": true,
 		};
 
 		// Add Custom Model (The Blocked Zone)
 		// Inside handleCalculate...
 
-		if (isBlockActive && blockPolygonRef.current) {
-			// 1. Get the raw latlngs
-			const rawLatLngs = blockPolygonRef.current.getLatLngs();
+		const blockedZones = zones.filter((z) => z.isBlocked);
 
-			// 2. Cast it to LatLng[][] (Array of rings) and grab the first ring [0]
-			// The first ring is the outer boundary of the polygon
-			const latlngs = (rawLatLngs as L.LatLng[][])[0];
+		if (blockedZones.length > 0) {
+			const multiPolygonCoordinates: any[] = [];
 
-			// 3. Now .map() will work because TS knows 'latlngs' is an array of objects
-			const coords = latlngs.map((ll) => [ll.lng, ll.lat]);
+			blockedZones.forEach((zone) => {
+				// Find the actual layer by ID
+				const layer = drawnItemsRef.current.getLayer(zone.id);
+				if (layer) {
+					// @ts-ignore
+					const rawLatLngs = layer.getLatLngs();
+					const ring = Array.isArray(rawLatLngs[0])
+						? rawLatLngs[0]
+						: rawLatLngs;
+					const coords = ring.map((ll: any) => [ll.lng, ll.lat]);
+					coords.push(coords[0]); // Close loop
+					multiPolygonCoordinates.push([coords]);
+				}
+			});
 
-			// Close the polygon loop for GeoJSON validity
-			coords.push(coords[0]);
-
-			body.custom_model = {
-				areas: {
-					block_zone: {
-						type: "Feature",
-						geometry: { type: "Polygon", coordinates: [coords] },
+			if (multiPolygonCoordinates.length > 0) {
+				body.custom_model = {
+					areas: {
+						hazard_zones: {
+							type: "Feature",
+							geometry: {
+								type: "MultiPolygon",
+								coordinates: multiPolygonCoordinates,
+							},
+							properties: {},
+						},
 					},
-				},
-				priority: [{ if: "in_block_zone", multiply_by: 0 }],
-			};
+					priority: [{ if: "in_hazard_zones", multiply_by: 0 }],
+				};
+			}
 		}
 
 		try {
@@ -546,21 +603,32 @@ export default function LiveDataPage({ onBack }: BackProps) {
 	// 5. Reset All
 	const handleReset = () => {
 		if (mapInstance.current) {
+			// ... (your existing marker removals) ...
 			if (startMarkerRef.current)
 				mapInstance.current.removeLayer(startMarkerRef.current);
 			if (endMarkerRef.current)
 				mapInstance.current.removeLayer(endMarkerRef.current);
 			if (routeLineRef.current)
 				mapInstance.current.removeLayer(routeLineRef.current);
+
+			// Clear layers
 			drawnItemsRef.current.clearLayers();
+
+			// ADD THIS: Kill the drawing tool if active
+			if (polygonDrawerRef.current) {
+				polygonDrawerRef.current.disable();
+				polygonDrawerRef.current = null;
+			}
+			mapInstance.current.doubleClickZoom.enable();
 		}
+		// ... (rest of your state resets remain the same) ...
 		startMarkerRef.current = null;
 		endMarkerRef.current = null;
 		routeLineRef.current = null;
-		blockPolygonRef.current = null;
 		setRouteResult(null);
 		setClickMode(null);
 		setIsDrawing(false);
+		// setIsBlockActive(false); // Make sure to reset block status too
 
 		stateLayersRef.current.forEach((l) => l.setStyle({ interactive: true }));
 	};
@@ -687,9 +755,13 @@ export default function LiveDataPage({ onBack }: BackProps) {
 						onClose={() => setNavigatorOpen(false)}
 						// Data
 						routeResult={routeResult}
+						isDrawing={isDrawing}
+						zones={zones}
 						// Actions
 						onDrawToggle={handleDrawToggle}
-						onBlockToggle={handleBlockToggle}
+						onToggleZone={handleToggleZone}
+						onDeleteZone={handleDeleteZone}
+						onBlockAll={handleBlockAll}
 						onClearZone={handleClearZone}
 						onSetStart={(active) => setClickMode(active ? "start" : null)}
 						onSetEnd={(active) => setClickMode(active ? "end" : null)}

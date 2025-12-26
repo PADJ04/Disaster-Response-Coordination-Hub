@@ -1,15 +1,27 @@
 import { useState, useEffect, useRef } from "react";
 
+export type Zone = {
+	id: number;
+	name: string;
+	isBlocked: boolean;
+};
+
 interface NavigatorDashboardProps {
 	onClose: () => void;
 
 	// --- Data from Parent ---
 	routeResult?: { dist: string; time: string } | null;
+	isDrawing: boolean;
+
+	zones: Zone[];
 
 	// --- Actions ---
 	onDrawToggle?: (active: boolean) => void;
-	onBlockToggle?: (active: boolean) => void;
+	onToggleZone?: (id: number) => void;
+	onDeleteZone?: (id: number) => void;
+	onBlockAll?: () => void;
 	onClearZone?: () => void;
+
 	onSetStart?: (active: boolean) => void;
 	onSetEnd?: (active: boolean) => void;
 	onCalculate?: () => void;
@@ -21,8 +33,12 @@ interface NavigatorDashboardProps {
 export default function NavigatorDashboard({
 	onClose,
 	routeResult,
+	isDrawing,
+	zones,
 	onDrawToggle,
-	onBlockToggle,
+	onToggleZone,
+	onDeleteZone,
+	onBlockAll,
 	onClearZone,
 	onSetStart,
 	onSetEnd,
@@ -33,8 +49,6 @@ export default function NavigatorDashboard({
 }: NavigatorDashboardProps) {
 	// --- UI State (Visual Only) ---
 	const [isPinned, setIsPinned] = useState(false);
-	const [drawActive, setDrawActive] = useState(false);
-	const [blockActive, setBlockActive] = useState(false);
 	const [startActive, setStartActive] = useState(false);
 	const [endActive, setEndActive] = useState(false);
 	const [autoAvoidActive, setAutoAvoidActive] = useState(false);
@@ -139,15 +153,9 @@ export default function NavigatorDashboard({
 
 	// --- Button Handlers ---
 	const toggleDraw = () => {
-		const newState = !drawActive;
-		setDrawActive(newState);
+		// We now rely on the Prop, not local state
+		const newState = !isDrawing;
 		if (onDrawToggle) onDrawToggle(newState);
-	};
-
-	const toggleBlock = () => {
-		const newState = !blockActive;
-		setBlockActive(newState);
-		if (onBlockToggle) onBlockToggle(newState);
 	};
 
 	const toggleStart = () => {
@@ -170,9 +178,6 @@ export default function NavigatorDashboard({
 
 	// --- Clean Reset Handler ---
 	const handleReset = () => {
-		// 1. Reset Local UI State
-		setDrawActive(false);
-		setBlockActive(false);
 		setStartActive(false);
 		setEndActive(false);
 		setAutoAvoidActive(false);
@@ -299,14 +304,16 @@ export default function NavigatorDashboard({
 					{/* 1. Hazard Zone (Manual) */}
 					<div>
 						<div className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest mb-2 flex justify-between">
-							<span>Manual Hazard Zone</span>
+							<span>Manual Hazard Zones</span>
 							<span className="text-slate-500">Step 1</span>
 						</div>
-						<div className="grid grid-cols-1 gap-2 mb-2">
+
+						{/* Draw Button */}
+						<div className="mb-3">
 							<button
 								onClick={toggleDraw}
-								className={`flex items-center justify-center gap-2 py-2 rounded font-medium text-xs transition border ${
-									drawActive
+								className={`w-full flex items-center justify-center gap-2 py-2 rounded font-medium text-xs transition border ${
+									isDrawing
 										? "bg-cyan-600 border-cyan-500 text-white shadow-[0_0_15px_rgba(8,145,178,0.4)]"
 										: "bg-slate-800 border-slate-700 text-cyan-100 hover:bg-slate-700"
 								}`}
@@ -322,51 +329,100 @@ export default function NavigatorDashboard({
 								>
 									<path d="M3 3h18v18H3zM12 8l-4 4 4 4M16 12H8" />
 								</svg>
-								{drawActive ? "Drawing Active..." : "Draw Polygon"}
+								{isDrawing ? "Finish Drawing" : "Draw New Polygon"}
 							</button>
 						</div>
-						<div className="grid grid-cols-2 gap-2">
-							<button
-								onClick={toggleBlock}
-								className={`flex items-center justify-center gap-2 py-2 rounded font-medium text-xs transition border ${
-									blockActive
-										? "bg-red-600 border-red-500 text-white shadow-[0_0_15px_rgba(220,38,38,0.4)]"
-										: "bg-slate-800 border-slate-700 text-red-200 hover:bg-red-900/20"
-								}`}
-							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="14"
-									height="14"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									strokeWidth="2"
+
+						{/* Zones List */}
+						<div className="space-y-2 mb-3 max-h-[150px] overflow-y-auto pr-1 custom-dashboard-scroll">
+							{zones.length === 0 && (
+								<div className="text-center py-4 text-slate-500 text-[10px] border border-dashed border-slate-700 rounded">
+									No active zones. Draw a polygon to start.
+								</div>
+							)}
+
+							{zones.map((zone) => (
+								<div
+									key={zone.id}
+									className="flex items-center gap-2 bg-slate-800/50 p-2 rounded border border-slate-700"
 								>
-									<circle cx="12" cy="12" r="10" />
-									<line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
-								</svg>
-								{blockActive ? "Zone Blocked" : "Block Zone"}
-							</button>
-							<button
-								onClick={onClearZone}
-								className="flex items-center justify-center gap-2 py-2 rounded font-medium text-xs bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 transition"
-							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="14"
-									height="14"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									strokeWidth="2"
-								>
-									<polyline points="3 6 5 6 21 6"></polyline>
-									<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-								</svg>
-								Clear
-							</button>
+									<div className="flex-1">
+										<div className="text-xs text-slate-200 font-medium">
+											{zone.name}
+										</div>
+										<div
+											className={`text-[9px] ${
+												zone.isBlocked ? "text-red-400" : "text-blue-400"
+											}`}
+										>
+											{zone.isBlocked ? "Status: BLOCKED" : "Status: PASSABLE"}
+										</div>
+									</div>
+
+									{/* Block Toggle */}
+									<button
+										onClick={() => onToggleZone && onToggleZone(zone.id)}
+										className={`p-1.5 rounded transition ${
+											zone.isBlocked
+												? "bg-red-500/20 text-red-400 border border-red-500/50 hover:bg-red-500/30"
+												: "bg-slate-700 text-slate-400 hover:text-white border border-transparent"
+										}`}
+										title={zone.isBlocked ? "Unblock" : "Block"}
+									>
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											width="14"
+											height="14"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											strokeWidth="2"
+										>
+											<circle cx="12" cy="12" r="10" />
+											<line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+										</svg>
+									</button>
+
+									{/* Delete */}
+									<button
+										onClick={() => onDeleteZone && onDeleteZone(zone.id)}
+										className="p-1.5 rounded text-slate-500 hover:text-red-400 hover:bg-slate-700 transition"
+										title="Remove Zone"
+									>
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											width="14"
+											height="14"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											strokeWidth="2"
+										>
+											<polyline points="3 6 5 6 21 6"></polyline>
+											<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+										</svg>
+									</button>
+								</div>
+							))}
 						</div>
+
+						{/* Bulk Actions */}
+						{zones.length > 0 && (
+							<div className="grid grid-cols-2 gap-2">
+								<button
+									onClick={onBlockAll}
+									className="py-1.5 bg-red-900/30 border border-red-500/30 text-red-200 text-[10px] rounded hover:bg-red-900/50 transition"
+								>
+									Block All
+								</button>
+								<button
+									onClick={onClearZone}
+									className="py-1.5 bg-slate-800 border border-slate-700 text-slate-400 text-[10px] rounded hover:bg-slate-700 transition"
+								>
+									Clear All
+								</button>
+							</div>
+						)}
 					</div>
 
 					<div className="h-px bg-slate-700/50"></div>
