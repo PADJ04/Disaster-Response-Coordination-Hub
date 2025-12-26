@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Globe, Menu, X } from "lucide-react";
+import { Globe, Menu, X, LogOut } from "lucide-react";
 import type { TabType } from "../types";
 import { useRef } from "react";
 
@@ -17,6 +17,7 @@ export default function Navbar({
 	const [isMenuOpen, setIsMenuOpen] = useState(false);
 	const [scrolled, setScrolled] = useState(false);
 	const menuRef = useRef<HTMLDivElement | null>(null);
+	const [showLogoutIcon, setShowLogoutIcon] = useState(false);
 
 	// Handle scroll effect
 	useEffect(() => {
@@ -43,6 +44,14 @@ export default function Navbar({
 			setActiveTab("live-data");
 		} else if (item === "Overview") {
 			setActiveTab("home");
+		} else if (item === "Dashboard") {
+			if (loggedInRole === "volunteer") {
+				setActiveTab("volunteer-dashboard"); // Now it handles volunteer dashboard
+			} else if (loggedInRole === "district") {
+				setActiveTab("district-dashboard"); // Now it handles district dashboard
+			} else {
+				setActiveTab("login"); // If no role, redirect to login
+			}
 		}
 		setIsMenuOpen(false);
 	};
@@ -72,7 +81,7 @@ export default function Navbar({
 
 				{/* Desktop Links */}
 				<div className="hidden md:flex items-center gap-8">
-					{["Overview", "Live Data"].map((item) => (
+					{["Overview", "Dashboard", "Live Data"].map((item) => (
 						<button
 							key={item}
 							onClick={() => handleNavClick(item)}
@@ -82,15 +91,29 @@ export default function Navbar({
 						</button>
 					))}
 					{loggedInRole ? (
-						<button
-							onClick={() => {
-								onLogout?.();
-								setIsMenuOpen(false);
-							}}
-							className="w-10 h-10 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full backdrop-blur-sm transition-all flex items-center justify-center text-sm font-medium"
-						>
-							{loggedInRole === "volunteer" ? "V" : "D"}
-						</button>
+						<div className="relative flex flex-col items-center">
+							{/* Profile Button */}
+							<button
+								onClick={() => setShowLogoutIcon((prev) => !prev)} // Toggle the logout icon visibility
+								className="w-12 h-12 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full backdrop-blur-sm transition-all flex items-center justify-center text-sm font-medium"
+							>
+								{loggedInRole === "volunteer" ? "V" : "D"}
+							</button>
+
+							{/* Show logout icon below profile icon */}
+							{showLogoutIcon && (
+								<button
+									onClick={() => {
+										onLogout?.();
+										setShowLogoutIcon(false); // Hide the logout icon after logging out
+									}}
+									className="mt-2 w-8 h-8 bg-red-600 hover:bg-red-700 rounded-full text-white flex items-center justify-center transition-all duration-300 shadow-xl transform scale-110 hover:scale-100"
+								>
+									<LogOut className="w-5 h-5 text-white" />{" "}
+									{/* Larger LogOut icon */}
+								</button>
+							)}
+						</div>
 					) : (
 						<button
 							onClick={() => {
@@ -123,7 +146,7 @@ export default function Navbar({
              shadow-blue-500/10 p-4 animate-fade-in-down"
 					>
 						<div className="flex flex-col gap-3">
-							{["Overview", "Live Data"].map((item) => (
+							{["Overview", "Dashboard", "Live Data"].map((item) => (
 								<button
 									key={item}
 									onClick={() => handleNavClick(item)}
