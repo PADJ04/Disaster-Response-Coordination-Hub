@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 
 export type Zone = {
-	id: number;
-	name: string;
-	isBlocked: boolean;
-	isAuto?: boolean;
+    id: number;
+    name: string;
+    isBlocked: boolean;
+    isAuto?: boolean;
+    source?: "manual" | "flood" | "report";
 };
 
 interface NavigatorDashboardProps {
@@ -29,6 +30,7 @@ interface NavigatorDashboardProps {
 	onReset?: () => void;
 	onProfileChange?: (profile: string) => void;
 	onAutoAvoidToggle?: (active: boolean) => void;
+	onReportAvoidToggle?: (active: boolean) => void;
 }
 
 export default function NavigatorDashboard({
@@ -47,12 +49,14 @@ export default function NavigatorDashboard({
 	onReset,
 	onProfileChange,
 	onAutoAvoidToggle,
+	onReportAvoidToggle,
 }: NavigatorDashboardProps) {
 	// --- UI State (Visual Only) ---
 	const [isPinned, setIsPinned] = useState(false);
 	const [startActive, setStartActive] = useState(false);
 	const [endActive, setEndActive] = useState(false);
 	const [autoAvoidActive, setAutoAvoidActive] = useState(false);
+	const [reportAvoidActive, setReportAvoidActive] = useState(false);
 	const [profile, setProfile] = useState("car");
 
 	// --- Draggable/Resizable Boilerplate ---
@@ -176,6 +180,12 @@ export default function NavigatorDashboard({
 		setAutoAvoidActive(newState);
 		if (onAutoAvoidToggle) onAutoAvoidToggle(newState);
 	};
+
+	const toggleReportAvoid = () => {
+        const newState = !reportAvoidActive;
+        setReportAvoidActive(newState);
+        if (onReportAvoidToggle) onReportAvoidToggle(newState);
+    };
 
 	// --- Clean Reset Handler ---
 	const handleReset = () => {
@@ -475,6 +485,46 @@ export default function NavigatorDashboard({
 					</div>
 
 					<div className="h-px bg-slate-700/50"></div>
+
+					{/* --- NEW BUTTON: Avoid Reported Areas --- */}
+                        <div className="mt-4">
+                            <div className="flex justify-between items-center mb-2">
+                                <div className="text-[10px] font-bold text-orange-400 uppercase tracking-widest">
+                                    Avoid Reported Areas
+                                </div>
+                                <span className="text-[9px] bg-orange-900/40 text-orange-300 px-1.5 py-0.5 rounded border border-orange-500/20">
+                                    CROWDSOURCED
+                                </span>
+                            </div>
+
+                            <button
+                                onClick={toggleReportAvoid}
+                                className={`w-full flex items-center justify-between px-3 py-2 rounded font-medium text-xs transition border ${
+                                    reportAvoidActive
+                                        ? "bg-orange-600 border-orange-500 text-white shadow-[0_0_15px_rgba(234,88,12,0.4)]"
+                                        : "bg-slate-800 border-slate-700 text-orange-200 hover:bg-slate-700"
+                                }`}
+                            >
+                                <span className="flex items-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                        <line x1="12" y1="9" x2="12" y2="13"></line>
+                                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                                    </svg>
+                                    Use Live Reports
+                                </span>
+                                <div
+                                    className={`w-3 h-3 rounded-full border ${
+                                        reportAvoidActive
+                                            ? "bg-white border-transparent"
+                                            : "border-orange-400"
+                                    }`}
+                                ></div>
+                            </button>
+                            <p className="text-[10px] text-slate-400 mt-1 leading-tight">
+                                Generates 250m safety zones around active user reports.
+                            </p>
+                        </div>
 
 					{/* 3. Route Points */}
 					<div>

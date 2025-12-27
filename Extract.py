@@ -21,7 +21,7 @@ print("Authentication successful. Starting analysis...")
 # =============================================================================
 # DATE: Uses today automatically. 
 # To check past dates, uncomment the next line:
-now = datetime.datetime(2019, 8, 15) 
+now = datetime.datetime(2025, 6, 11)
 # now = datetime.datetime.now()
 
 # SETTING 1: STRICTER THRESHOLD (1.50)

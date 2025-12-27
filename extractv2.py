@@ -19,7 +19,7 @@ print("Authentication successful. Starting analysis...")
 # =============================================================================
 # 2. SETTINGS
 # =============================================================================
-now = datetime.datetime(2019, 8, 15)
+now = datetime.datetime(2025, 6, 12)
 # now = datetime.datetime.now()
 
 DIFF_THRESHOLD = 1.35

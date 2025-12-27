@@ -435,60 +435,53 @@ export default function LiveDataPage({ onBack }: BackProps) {
 	};
 
 	const handleAutoAvoidToggle = (active: boolean) => {
-		// 1. If Turning OFF: Clean up auto-zones
-		if (!active) {
-			// Find all auto zones
-			const autoZones = zones.filter((z) => z.isAuto);
+        // 1. If Turning OFF: Clean up ONLY flood zones
+        if (!active) {
+            setZones((prev) => {
+                const toRemove = prev.filter((z) => z.isAuto && z.source === "flood");
+                toRemove.forEach((z) => {
+                    const layer = drawnItemsRef.current.getLayer(z.id);
+                    if (layer) drawnItemsRef.current.removeLayer(layer);
+                });
+                return prev.filter((z) => !(z.isAuto && z.source === "flood"));
+            });
+            return;
+        }
 
-			// Remove from Leaflet Map
-			autoZones.forEach((z) => {
-				const layer = drawnItemsRef.current.getLayer(z.id);
-				if (layer) drawnItemsRef.current.removeLayer(layer);
-			});
+        // 2. If Turning ON: Generate zones from Flood Data
+        if (floodEvents.length === 0) {
+            alert("No live flood data available to avoid.");
+            return;
+        }
 
-			// Remove from React State
-			setZones((prev) => prev.filter((z) => !z.isAuto));
-			return;
-		}
+        const newZones: Zone[] = [];
 
-		// 2. If Turning ON: Generate zones from Flood Data
-		if (floodEvents.length === 0) {
-			alert("No live flood data available to avoid.");
-			return;
-		}
+        floodEvents.forEach((event) => {
+            const { lat, lng } = event.coordinates;
+            // Use existing buffer creator (approx 500m)
+            const coords = createBufferPolygon(lat, lng);
 
-		const newZones: Zone[] = [];
+            const poly = L.polygon(coords as any, {
+                color: "#ff9800", // Orange
+                fillOpacity: 0.3,
+                weight: 2,
+                dashArray: "5, 5",
+            });
 
-		floodEvents.forEach((event) => {
-			const { lat, lng } = event.coordinates;
+            drawnItemsRef.current.addLayer(poly);
+            const layerId = L.Util.stamp(poly);
 
-			// Generate Square Coordinates
-			const coords = createBufferPolygon(lat, lng);
+            newZones.push({
+                id: layerId,
+                name: `Auto-Flood: ${event.location_name || "Zone"}`,
+                isBlocked: true,
+                isAuto: true,
+                source: "flood", // <--- Mark as Flood
+            });
+        });
 
-			// Create Leaflet Polygon
-			const poly = L.polygon(coords as any, {
-				color: "#ff9800", // Orange color to differentiate
-				fillOpacity: 0.3,
-				weight: 2,
-				dashArray: "5, 5", // Dashed line style
-			});
-
-			// Add to Map Layer
-			drawnItemsRef.current.addLayer(poly);
-			const layerId = L.Util.stamp(poly);
-
-			// Add to List
-			newZones.push({
-				id: layerId,
-				name: `Auto-Avoid: ${event.location_name || "Flood Zone"}`,
-				isBlocked: true, // Block by default
-				isAuto: true, // Mark as auto-generated
-			});
-		});
-
-		// Update React State
-		setZones((prev) => [...prev, ...newZones]);
-	};
+        setZones((prev) => [...prev, ...newZones]);
+    };
 
 	// --- ROUTING ACTIONS ---
 
@@ -706,6 +699,67 @@ export default function LiveDataPage({ onBack }: BackProps) {
 		stateLayersRef.current.forEach((l) => l.setStyle({ interactive: true }));
 	};
 
+	const handleReportAvoidToggle = (active: boolean) => {
+        // 1. If Turning OFF: Clean up ONLY report zones
+        if (!active) {
+            setZones((prev) => {
+                const toRemove = prev.filter((z) => z.isAuto && z.source === "report");
+                toRemove.forEach((z) => {
+                    const layer = drawnItemsRef.current.getLayer(z.id);
+                    if (layer) drawnItemsRef.current.removeLayer(layer);
+                });
+                return prev.filter((z) => !(z.isAuto && z.source === "report"));
+            });
+            return;
+        }
+
+        // 2. If Turning ON: Generate zones from Reports
+        if (reports.length === 0) {
+            alert("No active reports to avoid.");
+            return;
+        }
+
+        const newZones: Zone[] = [];
+        
+        // Approx 250m in degrees (0.00225)
+        const d = 0.00225;
+
+        reports.forEach((report) => {
+            if (!report.latitude || !report.longitude) return;
+
+            const lat = report.latitude;
+            const lng = report.longitude;
+
+            // Create 250m box
+            const coords = [
+                [lat + d, lng - d],
+                [lat + d, lng + d],
+                [lat - d, lng + d],
+                [lat - d, lng - d],
+            ];
+
+            const poly = L.polygon(coords as any, {
+                color: "#d32f2f", // Red color for reports
+                fillOpacity: 0.3,
+                weight: 2,
+                dashArray: "5, 5",
+            });
+
+            drawnItemsRef.current.addLayer(poly);
+            const layerId = L.Util.stamp(poly);
+
+            newZones.push({
+                id: layerId,
+                name: `Auto-Report: ${report.title || "Incident"}`,
+                isBlocked: true,
+                isAuto: true,
+                source: "report", // <--- Mark as Report
+            });
+        });
+
+        setZones((prev) => [...prev, ...newZones]);
+    };
+
 	return (
 		<div className="flex-1 flex flex-col w-full h-full mt-20">
 			{/* Header */}
@@ -842,6 +896,7 @@ export default function LiveDataPage({ onBack }: BackProps) {
 						onReset={handleReset}
 						onProfileChange={setProfile}
 						onAutoAvoidToggle={handleAutoAvoidToggle}
+						onReportAvoidToggle={handleReportAvoidToggle}
 					/>
 				)}
 

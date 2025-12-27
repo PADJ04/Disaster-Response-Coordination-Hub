@@ -149,7 +149,7 @@ async function gatekeeperCheck(district, state, date) {
 	const prompt = `
     ACT AS: A Strict Disaster Response Auditor.
     OBJECTIVE: Verify if there is an **ACTIVE, ONGOING** flood event in ${district} District, ${state}, India.
-    TIMEFRAME: Check news from 2 days before ${date} to 1 day after ${date}.
+    TIMEFRAME: Check news from 2 days before ${date} to 1 day after ${date} and its fine even flood is present on that month and be highly strict about year and month.
 
     ------------------------------------------
     🛑 "FALSE POSITIVE" TRAPS (RETURN "NO"):
