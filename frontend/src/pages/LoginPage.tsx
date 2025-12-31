@@ -95,7 +95,7 @@ export default function LoginPage({ onNavigate, onLogin }: LoginProps) {
                 <LogIn className="w-8 h-8 text-blue-400" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-white">District Authority</h3>
+                <h3 className="text-xl font-bold text-white">Authority Dashboard</h3>
                 <p className="text-blue-200/60 text-sm">Official command center</p>
               </div>
             </div>
