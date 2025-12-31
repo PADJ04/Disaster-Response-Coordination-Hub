@@ -15,7 +15,7 @@ export default function DistrictSignupPage({ onBack }: BackProps) {
             <Building2 className="w-10 h-10 text-blue-400" />
           </div>
           <div>
-            <h2 className="text-3xl md:text-4xl font-bold text-white">District Authority Registration</h2>
+            <h2 className="text-3xl md:text-4xl font-bold text-white">Authority Registration</h2>
             <p className="text-blue-200/60">Register your district administration account.</p>
           </div>
         </div>
